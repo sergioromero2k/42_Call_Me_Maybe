@@ -1,0 +1,41 @@
+# Python artifacts (including contents inside folders)
+__pycache__/**
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+env/**
+venv/**
+ENV/**
+env.bak/**
+venv.bak/**
+
+# MyPy cache (including nested files)
+.mypy_cache/**
+
+# Project output data
+data/output/**
+
+# Packaging artifacts
+build/**
+dist/**
+*.egg-info/**
+
+# Pytest cache
+.pytest_cache/**
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/**
+
+# Logs
+*.log
+
+# IDEs
+.vscode/**
+.idea/**
+
+# Keep these excluded
+!__pycache__/
+!data/output/
+!.mypy_cache/
