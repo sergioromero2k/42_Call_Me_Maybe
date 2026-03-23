@@ -27,7 +27,14 @@ class JSONStateMachine:
     def mask_invalid_tokens(
         self, logits: torch.Tensor, valid_token_ids: list[int]
     ) -> torch.Tensor:
-        """Apply -inf to all tokens, except those that are allowed."""
+        """
+        Allow only specific tokens by making all others with -inf.
+
+        @param logits Raw output scores from the model for each token.
+        @param valid_token_ids List of token IDs allowed at this step.
+
+        @return Masked logits where only valid tokens can be selected.
+        """
         mask = torch.full_like(logits, float("-inf"))
         mask[valid_token_ids] = 0
         return logits + mask
@@ -55,8 +62,7 @@ class JSONStateMachine:
                 valid_ids = [self.model._tokenizer.eos_token_id]
 
             if valid_ids:
-                logits_tensor = self.mask_invalid_tokens(
-                    logits_tensor, valid_ids)
+                logits_tensor = self.mask_invalid_tokens(logits_tensor, valid_ids)
 
             next_token_id = torch.argmax(logits_tensor).item()
 
