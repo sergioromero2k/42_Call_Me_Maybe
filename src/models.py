@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Models for cuntion calling data validation using Pydantic.
+Models for function calling data validation using Pydantic.
 Ensures strict type checking for input definitions and output results.
 """
 
@@ -17,7 +17,7 @@ class ParameterType(BaseModel):
 
 class FunctionDefinition(BaseModel):
     """
-    Detaild structure of an available function.
+    Detailed structure of an available function.
     Maps name, description, and its expected parameters/return type.
     """
     name: str

@@ -5,7 +5,7 @@ from src.models import FunctionDefinition, FunctionCallTest
 
 def load_function_definitions(route: str) -> list[FunctionDefinition]:
     """
-    Load function definitions from a JSON fiel and return validated objects.
+    Load function definitions from a JSON file and return validated objects.
     """
     with open(route, "r", encoding="utf-8") as f:
         raw_data = json.load(f)
