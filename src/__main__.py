@@ -5,6 +5,7 @@ from pathlib import Path
 from pydantic import ValidationError
 from src.utils import load_function_definitions, load_function_tests
 from llm_sdk.llm_sdk import Small_LLM_Model
+from src.constrained_dec import VocabularyMapper
 
 
 def main() -> None:
@@ -45,26 +46,14 @@ def main() -> None:
         print(f"Unexpected error: {e}")
         sys.exit(1)
 
-    # Step 2: Initialize the Small LLM MOdel (loads weights into memory)
     print("Initializing LLM model...")
     model = Small_LLM_Model()
+    print("Model loaded successfully!")
 
-    # Step 3: Test the pipeline with the first available test case
-    first_test = tests[0]
-
-    # Convert the text prompt into numerical token IDs (Tensors)
-    input_tensor = model.encode(first_test.prompt)
-
-    # Convert Tensor to a flat Python list for the logit function
-    input_ids_list = input_tensor.tolist()[0]
-    print(f"Tokens del prompt: {input_ids_list}")
-
-    # Retrieve the logits (raw probabilities) for the next predicted token
-    logits = model.get_logits_from_input_ids(input_ids_list)
-
-    # Display internal state for verification
-    print(f"Cantidad de tokens en el vocabulario: {len(logits)}")
-    print(f"Primeros 5 logits (probabilidades brutas): {logits[:5]}")
+    mapper = VocabularyMapper(model)
+    print(mapper.taken_to_str(90))
+    print(mapper.taken_to_str(8822))
+    print(mapper.find_tokens_with_prefix("fn"))
 
 
 if __name__ == "__main__":
