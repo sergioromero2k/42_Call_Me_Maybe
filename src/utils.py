@@ -8,7 +8,7 @@ def load_function_definitions(route: str) -> list[FunctionDefinition]:
     Load function definitions from a JSON file and return validated objects.
     """
     with open(route, "r", encoding="utf-8") as f:
-        raw_data = json.load(f)    
+        raw_data = json.load(f)
     return [FunctionDefinition(**dicc) for dicc in raw_data]
 
 

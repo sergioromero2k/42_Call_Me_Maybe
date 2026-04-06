@@ -52,6 +52,26 @@ class FunctionTrie:
                 return []
         return list(current_node["children"].keys())
 
+    def is_function_complete(self, tokens):
+        current_node = self.root
+
+        for token in tokens:
+            if token in current_node["children"]:
+                current_node = current_node["children"][token]
+            else:
+                return False
+        return current_node["is_end"]
+
+    def get_fn_name(self, tokens):
+        current_node = self.root
+
+        for token in tokens:
+            if token in current_node["children"]:
+                current_node = current_node["children"][token]
+            else:
+                return None
+        return current_node["fn_name"]
+
 
 def build_trie(
     functions: list[FunctionDefinition], model: Small_LLM_Model
@@ -62,3 +82,25 @@ def build_trie(
         tokens = model.encode(function.name).tolist()[0]
         trie.insert(tokens, function.name)
     return trie
+
+
+def select_function(prompt, model: Small_LLM_Model, trie: FunctionTrie):
+    input_ids = model.encode(prompt).tolist()[0]
+    tokens_generated = []
+
+    while True:
+        logits = model.get_logits_from_input_ids(input_ids)
+        tokens_valids = trie.get_valid_tokens(tokens_generated)
+
+        for token_id, value in enumerate(logits):
+            if token_id not in tokens_valids:
+                logits[token_id] = float("-inf")
+
+        max_token = logits.index(max(logits))
+        tokens_generated.append(max_token)
+        input_ids.append(max_token)
+
+        if trie.is_function_complete(tokens_generated):
+            break
+
+    return trie.get_fn_name(tokens_generated)
