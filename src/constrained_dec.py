@@ -11,11 +11,15 @@ class VocabularyMapper:
         route = model.get_path_to_vocab_file()
         with open(route, "r", encoding="utf-8") as f:
             raw_data = json.load(f)
-        raw_data_inv = {valor: clave for clave, valor in raw_data.items()}
-        self.vocab_inverted = raw_data_inv
+        self.vocab = raw_data
+        self.vocab_inverted = {
+            valor: clave for clave, valor in raw_data.items()}
 
-    def taken_to_str(self, token_id: int) -> str:
+    def token_to_str(self, token_id: int) -> str:
         return self.vocab_inverted[token_id]
+
+    def str_to_token(self, text: str) -> int:
+        return self.vocab[text]
 
     def find_tokens_with_prefix(self, prefix) -> list[int]:
         return [
@@ -102,5 +106,18 @@ def select_function(prompt, model: Small_LLM_Model, trie: FunctionTrie):
 
         if trie.is_function_complete(tokens_generated):
             break
-
     return trie.get_fn_name(tokens_generated)
+
+
+def generate_argument(
+    prompt: str, param_type: str, model: Small_LLM_Model, mapper: VocabularyMapper
+) -> str:
+    if param_type == "boolean":
+        valid_tokens = mapper.find_tokens_with_prefix(
+            "True"
+        ) + mapper.find_tokens_with_prefix("False")
+
+    elif param_type == "number":
+        ...
+    elif param_type == "string":
+        ...
