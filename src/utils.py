@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import json
+from pathlib import Path
 from src.models import FunctionDefinition, FunctionCallTest
 
 
@@ -19,3 +20,9 @@ def load_function_tests(route: str) -> list[FunctionCallTest]:
     with open(route, "r", encoding="utf-8") as f:
         raw_data = json.load(f)
     return [FunctionCallTest(**dicc) for dicc in raw_data]
+
+
+def write_results(results: list, output_path: Path) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(results, f, ensure_ascii=False, indent=4)

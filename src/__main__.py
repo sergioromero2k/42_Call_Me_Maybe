@@ -1,9 +1,11 @@
 import argparse
 import json
 import sys
+import time
 from pathlib import Path
 from pydantic import ValidationError
-from src.utils import load_function_definitions, load_function_tests
+from src.utils import (
+    load_function_definitions, load_function_tests, write_results)
 from src.constrained_dec import build_trie
 from src.generator import FunctionCaller
 from llm_sdk.llm_sdk import Small_LLM_Model
@@ -57,15 +59,19 @@ def main() -> None:
     caller = FunctionCaller(model, mapper, trie, functions)
 
     resultados = []
-    for test in tests[:1]:
-        print(f"Processing: {test.prompt}")
+    start = time.time()
+    for test in tests:
         resultado = caller.call(test.prompt)
-        print(f"Result: {resultado}")
         resultados.append(resultado.model_dump())
 
-    output_path = Path(args.output) / "function_calling_results.json"
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(resultados, f, ensure_ascii=False, indent=4)
+    try:
+        elapsed = time.time() - start
+        print(f"Tiempo total: {elapsed:.2f} segundos")
+        output_path = Path(args.output) / "function_calling_results.json"
+        write_results(resultados, output_path)
+    except Exception as e:
+        print(f"Error initializing components: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

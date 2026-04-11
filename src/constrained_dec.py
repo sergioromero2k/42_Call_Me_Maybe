@@ -162,3 +162,5 @@ def generate_argument(
                 input_ids.append(max_token)
                 string_generated.append(max_token)
         return model.decode(string_generated)
+    else:
+        raise ValueError(f"Unknown parameter type: {param_type}")
