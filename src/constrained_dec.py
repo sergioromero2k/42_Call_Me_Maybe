@@ -119,11 +119,11 @@ def generate_argument(
         inputs_ids = model.encode(prompt).tolist()[0]
         logits = model.get_logits_from_input_ids(inputs_ids)
 
-        for token_id, value in enumerate(logits):
-            if token_id not in valid_tokens:
-                logits[token_id] = float('-inf')
+        masked_logits = [float('-inf')] * len(logits)
+        for token_id in valid_tokens:
+            masked_logits[token_id] = logits[token_id]
 
-        max_token = logits.index(max(logits))
+        max_token = masked_logits.index(max(masked_logits)) 
         return mapper.token_to_str(max_token)
 
     elif param_type == "number":
@@ -136,11 +136,10 @@ def generate_argument(
         number_generated = []
         while True:
             logits = model.get_logits_from_input_ids(input_ids)
-            for token_id, value in enumerate(logits):
-                if token_id not in valid_tokens:
-                    logits[token_id] = float('-inf')
-
-            max_token = logits.index(max(logits))
+            masked_logits = [float('-inf')] * len(logits)
+            for token_id in valid_tokens:
+                masked_logits[token_id] = logits[token_id]
+            max_token = masked_logits.index(max(masked_logits)) 
             if max_token not in valid_tokens:
                 break
             else:

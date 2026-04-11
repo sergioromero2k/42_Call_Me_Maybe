@@ -4,6 +4,8 @@ import sys
 from pathlib import Path
 from pydantic import ValidationError
 from src.utils import load_function_definitions, load_function_tests
+from src.constrained_dec import build_trie
+from src.generator import FunctionCaller
 from llm_sdk.llm_sdk import Small_LLM_Model
 from src.constrained_dec import VocabularyMapper
 
@@ -51,9 +53,19 @@ def main() -> None:
     print("Model loaded successfully!")
 
     mapper = VocabularyMapper(model)
-    print(mapper.taken_to_str(90))
-    print(mapper.taken_to_str(8822))
-    print(mapper.find_tokens_with_prefix("fn"))
+    trie = build_trie(functions, model)
+    caller = FunctionCaller(model, mapper, trie, functions)
+
+    resultados = []
+    for test in tests[:1]:
+        print(f"Processing: {test.prompt}")
+        resultado = caller.call(test.prompt)
+        print(f"Result: {resultado}")
+        resultados.append(resultado.model_dump())
+
+    output_path = Path(args.output) / "function_calling_results.json"
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(resultados, f, ensure_ascii=False, indent=4)
 
 
 if __name__ == "__main__":
