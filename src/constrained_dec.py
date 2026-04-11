@@ -58,7 +58,6 @@ class FunctionTrie:
 
     def is_function_complete(self, tokens):
         current_node = self.root
-
         for token in tokens:
             if token in current_node["children"]:
                 current_node = current_node["children"][token]
@@ -110,14 +109,57 @@ def select_function(prompt, model: Small_LLM_Model, trie: FunctionTrie):
 
 
 def generate_argument(
-    prompt: str, param_type: str, model: Small_LLM_Model, mapper: VocabularyMapper
-) -> str:
+    prompt: str, param_type: str, model: Small_LLM_Model, mapper:
+        VocabularyMapper) -> str:
     if param_type == "boolean":
-        valid_tokens = mapper.find_tokens_with_prefix(
-            "True"
-        ) + mapper.find_tokens_with_prefix("False")
+        valid_tokens = {
+            mapper.str_to_token("true"),
+            mapper.str_to_token("false")
+        }
+        inputs_ids = model.encode(prompt).tolist()[0]
+        logits = model.get_logits_from_input_ids(inputs_ids)
+
+        for token_id, value in enumerate(logits):
+            if token_id not in valid_tokens:
+                logits[token_id] = float('-inf')
+
+        max_token = logits.index(max(logits))
+        return mapper.token_to_str(max_token)
 
     elif param_type == "number":
-        ...
+        valid_tokens = []
+        for digit in range(10):
+            valid_tokens.extend(mapper.find_tokens_with_prefix(str(digit)))
+        valid_tokens.extend(mapper.find_tokens_with_prefix("."))
+
+        input_ids = model.encode(prompt).tolist()[0]
+        number_generated = []
+        while True:
+            logits = model.get_logits_from_input_ids(input_ids)
+            for token_id, value in enumerate(logits):
+                if token_id not in valid_tokens:
+                    logits[token_id] = float('-inf')
+
+            max_token = logits.index(max(logits))
+            if max_token not in valid_tokens:
+                break
+            else:
+                input_ids.append(max_token)
+                number_generated.append(max_token)
+        return float(model.decode(number_generated))
+
     elif param_type == "string":
-        ...
+        input_ids = model.encode(prompt).tolist()[0]
+        string_generated = []
+        token_quote = mapper.str_to_token('"')
+
+        while True:
+            logits = model.get_logits_from_input_ids(input_ids)
+            max_token = logits.index(max(logits))
+
+            if max_token == token_quote:
+                break
+            else:
+                input_ids.append(max_token)
+                string_generated.append(max_token)
+        return model.decode(string_generated)
