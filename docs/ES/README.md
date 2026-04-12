@@ -28,7 +28,7 @@ El reto principal es la fiabilidad: los modelos de lenguaje pequeños como `Qwen
 | `fn_get_square_root` | Raíz cuadrada de un número | `a: number` |
 | `fn_substitute_string_with_regex` | Sustitución con regex | `source_string`, `regex`, `replacement` |
 
-> ⚠️ Los archivos de entrada pueden cambiar durante la evaluación. La solución es completamente genérica — sin nombres de funciones ni valores de argumentos hardcodeados.
+>  Los archivos de entrada pueden cambiar durante la evaluación. La solución es completamente genérica — sin nombres de funciones ni valores de argumentos hardcodeados.
 
 ---
 
@@ -287,45 +287,36 @@ make lint
 ```
 call-me-maybe/
 │
-├──  data/
-│   ├── input/                            # Archivos JSON de entrada (tests y definiciones)
-│   │   ├── function_calling_tests.json   # Prompts en lenguaje natural (11 casos de prueba)
-│   │   └── functions_definition.json     # Esquemas de funciones disponibles (5 funciones)
-│   └── output/                           # Resultados generados — NO subir a Git
-│       └── function_calling_results.json # Salida: prompt + fn_name + args por prompt
+├── data/                                 # Datos del proyecto
+│   ├── input/                            # Archivos de entrada
+│   │   ├── function_calling_tests.json   # Prompts en lenguaje natural
+│   │   └── functions_definition.json     # Esquemas de las funciones disponibles
+│   └── output/                           # NO subir a Git (según el manual)
+│       └── function_calling_results.json # Resultados generados por el LLM
 │
-├──  llm_sdk/                           # SDK proporcionado — copiado tal cual, sin modificar
+├── llm_sdk/                              # SDK proporcionado (no se modifica)
 │   └── llm_sdk/
-│       └── __init__.py                   # Clase Small_LLM_Model (wrapper Qwen/Qwen3-0.6B)
+│       └── __init__.py                   # Clase Small_LLM_Model
 │
-├──  src/                               # Paquete fuente principal
-│   ├── __init__.py                       # Marcador de paquete
-│   ├── __main__.py                       # Punto de entrada para 'uv run python -m src'
-│   │                                     #   argparse: flags --input / --output
-│   │                                     #   carga archivos, ejecuta pipeline, escribe salida
-│   │
-│   ├── models.py                         # Clases Pydantic para validación:
-│   │                                     #   FunctionParameter, FunctionDefinition
-│   │                                     #   FunctionCallTest, FunctionCallResult
-│   │
-│   ├── constrained_dec.py                # NÚCLEO: motor de decodificación restringida
-│   │                                     #   VocabularyMapper  (token_id -> cadena)
-│   │                                     #   JSONStateMachine  (rastrea estado del parser)
-│   │                                     #   mask_invalid_tokens()
-│   │                                     #   generate()  (bucle token a token)
-│   │
-│   └── utils.py                          # Gestión de archivos y utilidades:
-│                                         #   load_function_definitions()
-│                                         #   load_function_tests()
-│                                         #   write_results()
-│                                         #   build_selection_prompt()
-│                                         #   build_extraction_prompt()
+├── src/                                  # Paquete principal de código fuente
+│   ├── __init__.py                       # Marcador de paquete Python
+│   ├── __main__.py                       # Punto de entrada del programa
+│   ├── models.py                         # Modelos de Pydantic (validación)
+│   ├── constrained_dec.py                # Motor de decodificación restringida
+│   │                                     #   VocabularyMapper, FunctionTrie
+│   │                                     #   build_trie(), select_function()
+│   │                                     #   generate_argument()
+│   ├── generator.py                      # Orquestador FunctionCaller
+│   ├── tools.py                          # Implementación real de las funciones
+│   └── utils.py                          # Funciones de carga y escritura de JSON
+│                                         #   (load_definitions, write_results, etc.)
 │
-├──  .gitignore                         # Excluye __pycache__, output/, .mypy_cache, etc.
-├──  Makefile                           # Reglas obligatorias: install / run / debug / clean / lint
-├──  pyproject.toml                     # Gestión de dependencias con uv
-├──  uv.lock                            # Lockfile de uv
-└──  README.md                          # Documentación completa del proyecto
+├── .gitignore                            # Archivos ignorados por Git
+├── .mypy.ini                             # Configuración del linter de tipos
+├── Makefile                              # Automatización de tareas (reglas IV.2)
+├── pyproject.toml                        # Configuración del proyecto y dependencias
+├── uv.lock                               # Archivo de bloqueo de dependencias
+└── README.md                             # Documentación general del proyecto
 ```
 
 ### Uso de IA en este proyecto

@@ -17,9 +17,9 @@ def fn_reverse_string(s: str) -> str:
     return s[::-1]
 
 
-def fn_get_square_root(a: int) -> int:
+def fn_get_square_root(a: int) -> float:
     """Return the square root of a number."""
-    return a**(0.5)
+    return float(a**(0.5))
 
 
 def fn_substitute_string_with_regex(

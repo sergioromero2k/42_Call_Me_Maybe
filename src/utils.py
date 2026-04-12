@@ -2,9 +2,10 @@
 import json
 from pathlib import Path
 from src.models import FunctionDefinition, FunctionCallTest
+from typing import Any
 
 
-def load_function_definitions(route: str) -> list[FunctionDefinition]:
+def load_function_definitions(route: Path) -> list[FunctionDefinition]:
     """
     Loads and validates function definitions from a JSON file.
 
@@ -19,7 +20,7 @@ def load_function_definitions(route: str) -> list[FunctionDefinition]:
     return [FunctionDefinition(**dicc) for dicc in raw_data]
 
 
-def load_function_tests(route: str) -> list[FunctionCallTest]:
+def load_function_tests(route: Path) -> list[FunctionCallTest]:
     """
     Loads and validates test cases from a JSON file.
 
@@ -34,7 +35,7 @@ def load_function_tests(route: str) -> list[FunctionCallTest]:
     return [FunctionCallTest(**dicc) for dicc in raw_data]
 
 
-def write_results(results: list[dict], output_path: Path) -> None:
+def write_results(results: list[dict[str, Any]], output_path: Path) -> None:
     """
     Saves the generated function calling results to a JSON file.
 

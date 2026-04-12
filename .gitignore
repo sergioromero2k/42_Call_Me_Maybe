@@ -38,4 +38,5 @@ dist/**
 # Keep these excluded
 !__pycache__/
 !data/output/
+data/output/
 !.mypy_cache/

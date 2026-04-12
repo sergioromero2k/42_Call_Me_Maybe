@@ -52,6 +52,9 @@ class FunctionCaller:
         """
         # Step 1: Identify the function to call using constrained decoding
         fn_name = select_function(prompt, self.model, self.trie)
+        if fn_name is None:
+            raise ValueError(
+                f"Could not select a function for prompt: {prompt}")
         print(f"Function selected: {fn_name}")
         selected_function = None
         for function in self.functions:

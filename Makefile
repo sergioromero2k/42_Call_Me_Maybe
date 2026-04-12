@@ -53,15 +53,15 @@ clean:
 # --- Linting (Code Quality) ---
 lint:
 	@echo "$(GREEN)Running Flake8...$(RESET)"
-	-$(PYTHON) -m flake8 . --exclude=venv,test_env,env,.venv
+	-$(PYTHON) -m flake8 src/ --max-line-length=79
 	@echo "$(GREEN)Running Mypy...$(RESET)"
-	-$(PYTHON) -m mypy . --ignore-missing-imports --disallow-untyped-defs --check-untyped-defs --no-error-summary || true
+	-$(PYTHON) -m mypy src/ --no-error-summary
 
 lint-strict:
 	@echo "$(RED)Running Flake8...$(RESET)"
-	-$(PYTHON) -m flake8 . --exclude=venv,test_env,env,.venv
+	-$(PYTHON) -m flake8 src/ --exclude=venv,test_env,env,.venv
 
 	@echo "$(RED)Running Mypy...$(RESET)"
-	-$(PYTHON) -m mypy . --strict
+	-$(PYTHON) -m mypy src/ --strict
 
 .PHONY: all install run debug clean lint lint-strict
