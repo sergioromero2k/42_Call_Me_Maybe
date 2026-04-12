@@ -14,8 +14,20 @@ from src.constrained_dec import VocabularyMapper
 
 def main() -> None:
     """
-    Load function definitions and test cases from JSON files,
-    validate them, and print the numeber of loaded items.
+    Main entry point for the LLM function calling tool.
+
+    Orchestrates the loading of function definitions and test prompts.
+    initializes the LLM and the constrained decoding components,
+    and executes the inference process to generate structured JSON output.
+
+    Args:
+        None (Uses command-line arguments: --input, --output).
+
+    Raises:
+        FileNotFoundError: If input JSON files are missing.
+        json.JSONDecodeError: If input files contain invalid JSON.
+        ValidationError: If data does not match Pydantic schemas.
+        SystemExit: On any fatal error to ensure a graceful crash
     """
     parser = argparse.ArgumentParser(
         description="42 Call Me Maybe - LLM Function Caller"
@@ -54,6 +66,7 @@ def main() -> None:
     model = Small_LLM_Model()
     print("Model loaded successfully!")
 
+    # Components for constrained decoding.
     mapper = VocabularyMapper(model)
     trie = build_trie(functions, model)
     caller = FunctionCaller(model, mapper, trie, functions)
@@ -61,6 +74,7 @@ def main() -> None:
     resultados = []
     start = time.time()
     for test in tests:
+        # Generate structured output using constrained decoding.
         resultado = caller.call(test.prompt)
         resultados.append(resultado.model_dump())
 

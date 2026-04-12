@@ -10,15 +10,24 @@ from typing import Dict, Any, Literal
 
 class ParameterType(BaseModel):
     """
-    Represents the data type of a function parameter or return value.
+    Schema for defining the data type of a function parameter or return value.
+
+    Attributes:
+        type: The allowed data type string (number, string, or boolean).
     """
     type: Literal["number", "string", "boolean"]
 
 
 class FunctionDefinition(BaseModel):
     """
-    Detailed structure of an available function.
-    Maps name, description, and its expected parameters/return type.
+    Represents the schema and metadata of a callable function.
+
+    Attributes:
+        name: The unique identifier of the function.
+        description: A brief explanation of what the function does.
+        parameters: A dictionary mapping parameter names
+                    to their type definitions.
+        returns: The expected return type of the function.
     """
     name: str
     description: str
@@ -27,15 +36,26 @@ class FunctionDefinition(BaseModel):
 
 
 class FunctionCallTest(BaseModel):
-    """Input prompt from function_calling_test.json"""
+    """
+    Represents an individual test case for function calling.
+
+    Attributes:
+        prompt: The natural language request to be processed by the LLM.
+    """
     prompt: str
 
 
 class FunctionCallResult(BaseModel):
     """
-    Expected output structure for function_calling_results.json.
-    Includes the original prompt, the selected function,
-    and extracted arguments.
+    Schema for the final output of a function calling operation.
+
+    This matches the structure required for 'function_calling_results.json'.
+
+    Attributes:
+        prompt: The original input prompt.
+        fn_name: The name of the function identified by the model.
+        args: A dictionary of key-value pairs representing
+                the generated arguments.
     """
     prompt: str
     fn_name: str

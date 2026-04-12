@@ -6,7 +6,20 @@ from src.models import FunctionDefinition
 
 
 class VocabularyMapper:
+    """
+    Handles the mapping between tokens and their string representations.
+
+    Provides utility methods to convert IDs to text and search for tokens
+    sharing specific prefixes to aid in constrained generation.
+    """
     def __init__(self, model: Small_LLM_Model):
+        """
+        Initializes the mapper using the model's vocabulary file.
+
+        Args:
+            model: An instance of Small_LLM_Model to retrieve
+                    the vocabulary path.
+        """
         self.model = model
         route = model.get_path_to_vocab_file()
         with open(route, "r", encoding="utf-8") as f:
@@ -16,12 +29,16 @@ class VocabularyMapper:
             valor: clave for clave, valor in raw_data.items()}
 
     def token_to_str(self, token_id: int) -> str:
+        """Converts a token ID back to its string representation."""
         return self.vocab_inverted[token_id]
 
     def str_to_token(self, text: str) -> int:
+        """Converts a string token to its corresponding integer ID."""
         return self.vocab[text]
 
-    def find_tokens_with_prefix(self, prefix) -> list[int]:
+    def find_tokens_with_prefix(self, prefix: str) -> list[int]:
+        """Finds all token IDs whose string representation
+        starts with a prefix."""
         return [
             id for id, data in self.vocab_inverted.items()
             if data.startswith(prefix)
@@ -29,10 +46,21 @@ class VocabularyMapper:
 
 
 class FunctionTrie:
+    """
+    A prefix tree (Trie) used to constrain function name generation.
+
+    Ensures that the LLM only generates function names that exist within
+    the provided function definitions.
+    """
     def __init__(self):
+        """Initializes an empty Trie root."""
         self.root = {"children": {}, "is_end": False, "fn_name": None}
 
-    def insert(self, tokens, fn_name):
+    def insert(self, tokens: list[int], fn_name: str) -> None:
+        """
+        Inserts a sequence of tokens representing
+        a function name into the Trie.
+        """
         current_node = self.root
 
         for token in tokens:
@@ -46,7 +74,11 @@ class FunctionTrie:
         current_node["is_end"] = True
         current_node["fn_name"] = fn_name
 
-    def get_valid_tokens(self, token_generated):
+    def get_valid_tokens(self, token_generated: list[int]) -> list[int]:
+        """
+        Returns a list of valid next tokens based
+        on the current generation path.
+        """
         current_node = self.root
 
         for token in token_generated:
@@ -56,7 +88,11 @@ class FunctionTrie:
                 return []
         return list(current_node["children"].keys())
 
-    def is_function_complete(self, tokens):
+    def is_function_complete(self, tokens: list[int]) -> bool:
+        """
+        Checks if the sequence of tokens
+        forms a complete valid function name.
+        """
         current_node = self.root
         for token in tokens:
             if token in current_node["children"]:
@@ -65,7 +101,11 @@ class FunctionTrie:
                 return False
         return current_node["is_end"]
 
-    def get_fn_name(self, tokens):
+    def get_fn_name(self, tokens: list[int]) -> str | None:
+        """
+        Retrieves the full function
+        name string associated with a token sequence.
+        """
         current_node = self.root
 
         for token in tokens:
@@ -79,6 +119,16 @@ class FunctionTrie:
 def build_trie(
     functions: list[FunctionDefinition], model: Small_LLM_Model
 ) -> FunctionTrie:
+    """
+    Builds a FunctionTrie from a list of valid function definitions.
+
+    Args:
+        functions: List of allowed function definitions.
+        model: The LLM model used to encode names into tokens.
+
+    Returns:
+        A populated FunctionTrie object.
+    """
     trie = FunctionTrie()
 
     for function in functions:
@@ -87,7 +137,21 @@ def build_trie(
     return trie
 
 
-def select_function(prompt, model: Small_LLM_Model, trie: FunctionTrie):
+def select_function(
+        prompt: str, model: Small_LLM_Model, trie: FunctionTrie) -> str:
+    """
+    Generates a valid function name token-by-token using constrained decoding.
+
+    Modifies logits at each step to ensure only valid Trie paths are chosen.
+
+    Args:
+        prompt: The natural language request.
+        model: The LLM instance.
+        trie: The Trie containing valid function names.
+
+    Returns:
+        The selected function name as a string.
+    """
     input_ids = model.encode(prompt).tolist()[0]
     tokens_generated = []
 
@@ -110,7 +174,22 @@ def select_function(prompt, model: Small_LLM_Model, trie: FunctionTrie):
 
 def generate_argument(
     prompt: str, param_type: str, model: Small_LLM_Model, mapper:
-        VocabularyMapper) -> str:
+        VocabularyMapper) -> str | float:
+    """
+    Generates a function argument constrained by a specific data type.
+
+    Args:
+        prompt: The context prompt for the argument.
+        param_type: The required type (boolean, number, string).
+        model: The LLM instance.
+        mapper: VocabularyMapper to validate allowed tokens.
+
+    Returns:
+        The generated argument value in its correct Python type.
+
+    Raises:
+        ValueError: If an unsupported parameter type is provided.
+    """
     if param_type == "boolean":
         valid_tokens = {
             mapper.str_to_token("true"),
@@ -123,7 +202,7 @@ def generate_argument(
         for token_id in valid_tokens:
             masked_logits[token_id] = logits[token_id]
 
-        max_token = masked_logits.index(max(masked_logits)) 
+        max_token = masked_logits.index(max(masked_logits))
         return mapper.token_to_str(max_token)
 
     elif param_type == "number":
@@ -139,7 +218,7 @@ def generate_argument(
             masked_logits = [float('-inf')] * len(logits)
             for token_id in valid_tokens:
                 masked_logits[token_id] = logits[token_id]
-            max_token = masked_logits.index(max(masked_logits)) 
+            max_token = masked_logits.index(max(masked_logits))
             if max_token not in valid_tokens:
                 break
             else:
