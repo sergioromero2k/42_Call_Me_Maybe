@@ -34,7 +34,7 @@ def load_function_tests(route: str) -> list[FunctionCallTest]:
     return [FunctionCallTest(**dicc) for dicc in raw_data]
 
 
-def write_results(results: list, output_path: Path) -> None:
+def write_results(results: list[dict], output_path: Path) -> None:
     """
     Saves the generated function calling results to a JSON file.
 

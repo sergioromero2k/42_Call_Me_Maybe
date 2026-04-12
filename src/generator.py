@@ -1,29 +1,27 @@
 #!/usr/bin/env python3
 
+from llm_sdk.llm_sdk import Small_LLM_Model
 from src.constrained_dec import (
     generate_argument,
     select_function,
+    VocabularyMapper,
+    FunctionTrie,
 )
-from src.models import FunctionCallResult
+from src.models import FunctionCallResult, FunctionDefinition
 
 
 class FunctionCaller:
     """
-    Generates a function argument constrained by a specific data type.
+    Orchestrates the function selection and argument generation pipeline.
 
-    Args:
-        prompt: The context prompt for the argument.
-        param_type: The required type (boolean, number, string).
-        model: The LLM instance.
-        mapper: VocabularyMapper to validate allowed tokens.
-
-    Returns:
-        The generated argument value in its correct Python type.
-
-    Raises:
-        ValueError: If an unsupported parameter type is provided.
+    Uses constrained decoding to select the correct function and generate
+    each argument based on the function schema.
     """
-    def __init__(self, model, mapper, trie, functions):
+    def __init__(
+            self,
+            model: Small_LLM_Model,
+            mapper: VocabularyMapper,
+            trie: FunctionTrie, functions: list[FunctionDefinition]) -> None:
         """
         Initializes the generator with necessary LLM and decoding components.
 
@@ -38,7 +36,7 @@ class FunctionCaller:
         self.trie = trie
         self.functions = functions
 
-    def call(self, prompt):
+    def call(self, prompt: str) -> FunctionCallResult:
         """
         Processes a prompt to return a structured function call.
 
@@ -55,12 +53,14 @@ class FunctionCaller:
         # Step 1: Identify the function to call using constrained decoding
         fn_name = select_function(prompt, self.model, self.trie)
         print(f"Function selected: {fn_name}")
-
+        selected_function = None
         for function in self.functions:
             if function.name == fn_name:
                 selected_function = function
                 break
 
+        if selected_function is None:
+            raise ValueError(f"Function {fn_name} not found in definitions")
         args = {}
         # Step 2: Generate each argument according to its defined type
         for param_name, param_type in selected_function.parameters.items():
