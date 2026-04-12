@@ -27,7 +27,7 @@ The core challenge is reliability: small language models like `Qwen/Qwen3-0.6B` 
 | `fn_get_square_root` | Square root of a number | `a: number` |
 | `fn_substitute_string_with_regex` | Regex substitution | `source_string`, `regex`, `replacement` |
 
-> ⚠️ The input files may change during evaluation. The solution is fully generic — no hardcoded function names or argument values.
+>  The input files may change during evaluation. The solution is fully generic — no hardcoded function names or argument values.
 
 ---
 
