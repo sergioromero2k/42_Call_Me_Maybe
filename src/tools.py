@@ -2,7 +2,7 @@
 from re import sub
 
 
-def fn_add_numbers(a: int, b: int) -> int:
+def fn_add_numbers(a: float, b: float) -> float:
     """Return the sum of two integers."""
     return a + b
 

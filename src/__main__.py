@@ -21,7 +21,8 @@ def main() -> None:
     and executes the inference process to generate structured JSON output.
 
     Args:
-        None (Uses command-line arguments: --input, --output).
+        None (Uses command-line arguments: 
+            --functions_definition, --input, --output).
 
     Raises:
         FileNotFoundError: If input JSON files are missing.
@@ -33,13 +34,22 @@ def main() -> None:
         description="42 Call Me Maybe - LLM Function Caller"
     )
     # Command-line arguments for input and output directions
-    parser.add_argument("--input", default="data/input", type=str)
-    parser.add_argument("--output", default="data/output", type=str)
-    args = parser.parse_args()
+    parser.add_argument(
+    "--functions_definition",
+    default="data/input/functions_definition.json",
+    type=str
+    )
 
-    input_path = Path(args.input)
-    route_definitions = input_path / "functions_definition.json"
-    route_tests = input_path / "function_calling_tests.json"
+    parser.add_argument(
+        "--input",
+        default="data/input/function_calling_tests.json",
+        type=str
+    )
+    parser.add_argument("--output", default="data/output", type=str)
+
+    args = parser.parse_args()
+    route_definitions = Path(args.functions_definition)
+    route_tests = Path(args.input)
 
     try:
         # Load and validate function definitions and tests

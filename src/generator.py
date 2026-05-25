@@ -48,7 +48,7 @@ class FunctionCaller:
 
         Returns:
             A FunctionResult object containing the prompt,
-            function name, and args.
+            name, and parameters.
         """
         # Step 1: Identify the function to call using constrained decoding
         fn_name = select_function(prompt, self.model, self.trie)
@@ -71,4 +71,4 @@ class FunctionCaller:
                 prompt, param_type.type, self.model, self.mapper)
             args[param_name] = value
 
-        return FunctionCallResult(prompt=prompt, fn_name=fn_name, args=args)
+        return FunctionCallResult(prompt=prompt, name=fn_name, parameters=args)
