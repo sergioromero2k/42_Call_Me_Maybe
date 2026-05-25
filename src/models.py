@@ -53,10 +53,10 @@ class FunctionCallResult(BaseModel):
 
     Attributes:
         prompt: The original input prompt.
-        fn_name: The name of the function identified by the model.
-        args: A dictionary of key-value pairs representing
+        name: The name of the function identified by the model.
+        parameters: A dictionary of key-value pairs representing
                 the generated arguments.
     """
     prompt: str
-    fn_name: str
-    args: Dict[str, Any]
+    name: str
+    parameters: Dict[str, Any]
