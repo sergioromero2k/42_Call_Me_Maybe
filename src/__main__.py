@@ -6,10 +6,9 @@ from pathlib import Path
 from pydantic import ValidationError
 from src.utils import (
     load_function_definitions, load_function_tests, write_results)
-from src.constrained_dec import build_trie
 from src.generator import FunctionCaller
-from llm_sdk.llm_sdk import Small_LLM_Model
-from src.constrained_dec import VocabularyMapper
+from llm_sdk import Small_LLM_Model
+from src.constrained_dec import build_trie, VocabularyMapper
 
 
 def main() -> None:
@@ -21,7 +20,7 @@ def main() -> None:
     and executes the inference process to generate structured JSON output.
 
     Args:
-        None (Uses command-line arguments: 
+        None (Uses command-line arguments:
             --functions_definition, --input, --output).
 
     Raises:
@@ -35,21 +34,25 @@ def main() -> None:
     )
     # Command-line arguments for input and output directions
     parser.add_argument(
-    "--functions_definition",
-    default="data/input/functions_definition.json",
-    type=str
+        "--functions_definition",
+        default="data/input/functions_definition.json",
+        type=str
     )
-
     parser.add_argument(
         "--input",
         default="data/input/function_calling_tests.json",
         type=str
     )
-    parser.add_argument("--output", default="data/output", type=str)
+    parser.add_argument(
+        "--output",
+        default="data/output/function_calling_results.json",
+        type=str
+    )
 
     args = parser.parse_args()
     route_definitions = Path(args.functions_definition)
     route_tests = Path(args.input)
+    output_path = Path(args.output)
 
     try:
         # Load and validate function definitions and tests
@@ -73,28 +76,33 @@ def main() -> None:
         sys.exit(1)
 
     print("Initializing LLM model...")
-    model = Small_LLM_Model()
-    print("Model loaded successfully!")
+    try:
+        model = Small_LLM_Model()
+        print("Model loaded successfully!")
 
-    # Components for constrained decoding.
-    mapper = VocabularyMapper(model)
-    trie = build_trie(functions, model)
-    caller = FunctionCaller(model, mapper, trie, functions)
+        # Components for constrained decoding.
+        mapper = VocabularyMapper(model)
+        trie = build_trie(functions, model)
+        caller = FunctionCaller(model, mapper, trie, functions)
+    except Exception as e:
+        print(f"Error initializing LLM components: {e}", file=sys.stderr)
+        sys.exit(1)
 
-    resultados = []
+    results = []
     start = time.time()
     for test in tests:
         # Generate structured output using constrained decoding.
-        resultado = caller.call(test.prompt)
-        resultados.append(resultado.model_dump())
+        result = caller.call(test.prompt)
+        results.append(result.model_dump())
+
+    elapsed = time.time() - start
+    print(f"Tiempo total: {elapsed:.2f} segundos")
 
     try:
-        elapsed = time.time() - start
-        print(f"Tiempo total: {elapsed:.2f} segundos")
-        output_path = Path(args.output) / "function_calling_results.json"
-        write_results(resultados, output_path)
+        write_results(results, output_path)
+        print(f"Results successfully saved to: {output_path}")
     except Exception as e:
-        print(f"Error initializing components: {e}")
+        print(f"Error writing output results: {e}", file=sys.stderr)
         sys.exit(1)
 
 
