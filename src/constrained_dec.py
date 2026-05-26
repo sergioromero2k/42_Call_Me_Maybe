@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import json
-from llm_sdk.llm_sdk import Small_LLM_Model
+from llm_sdk import Small_LLM_Model
 from src.models import FunctionDefinition
 from typing import TypedDict, Any
 
@@ -18,6 +18,7 @@ class TrieNode(TypedDict):
         fn_name: The full string name of the function if
                     is_end is True, otherwise None.
     """
+
     children: dict[int, "TrieNode"]
     is_end: bool
     fn_name: str | None
@@ -30,6 +31,7 @@ class VocabularyMapper:
     Provides utility methods to convert IDs to text and search for tokens
     sharing specific prefixes to aid in constrained generation.
     """
+
     def __init__(self, model: Small_LLM_Model) -> None:
         """
         Initializes the mapper using the model's vocabulary file.
@@ -44,22 +46,24 @@ class VocabularyMapper:
             raw_data = json.load(f)
         self.vocab = raw_data
         self.vocab_inverted = {
-            valor: clave for clave, valor in raw_data.items()}
+            int(valor): str(clave) for clave, valor in raw_data.items()
+        }
 
     def token_to_str(self, token_id: int) -> Any:
         """Converts a token ID back to its string representation."""
-        return str(self.vocab_inverted[token_id])
+        return self.vocab_inverted.get(token_id, "")
 
     def str_to_token(self, text: str) -> Any:
         """Converts a string token to its corresponding integer ID."""
-        return int(self.vocab[text])
+        return int(self.vocab.get(text, -1))
 
     def find_tokens_with_prefix(self, prefix: str) -> list[int]:
         """Finds all token IDs whose string representation
         starts with a prefix."""
         return [
-            id for id, data in self.vocab_inverted.items()
-            if data.startswith(prefix)
+            token_id
+            for token_id, token_str in self.vocab_inverted.items()
+            if token_str.startswith(prefix)
         ]
 
 
@@ -70,6 +74,7 @@ class FunctionTrie:
     Ensures that the LLM only generates function names that exist within
     the provided function definitions.
     """
+
     def __init__(self) -> None:
         """Initializes an empty Trie root."""
         self.root: TrieNode = {
@@ -152,13 +157,14 @@ def build_trie(
     trie = FunctionTrie()
 
     for function in functions:
-        tokens = model.encode(function.name).tolist()[0]
+        tokens = model.encode(function.name)
         trie.insert(tokens, function.name)
     return trie
 
 
 def select_function(
-        prompt: str, model: Small_LLM_Model, trie: FunctionTrie) -> str | None:
+    prompt: str, model: Small_LLM_Model, trie: FunctionTrie
+) -> str | None:
     """
     Generates a valid function name token-by-token using constrained decoding.
 
@@ -172,32 +178,34 @@ def select_function(
     Returns:
         The selected function name as a string.
     """
-    input_ids = model.encode(prompt).tolist()[0]
+    input_ids = model.encode(prompt)
     tokens_generated: list[int] = []
 
-    while True:
+    for _ in range(50):
         logits = model.get_logits_from_input_ids(input_ids)
         tokens_valids = trie.get_valid_tokens(tokens_generated)
 
-        for token_id, value in enumerate(logits):
-            if token_id not in tokens_valids:
-                logits[token_id] = float("-inf")
+        if not tokens_valids:
+            break
 
-        max_token = logits.index(max(logits))
+        masked_logits = [float("-inf")] * len(logits)
+        for token_id in tokens_valids:
+            masked_logits[token_id] = logits[token_id]
+
+        max_token = masked_logits.index(max(masked_logits))
         tokens_generated.append(max_token)
         input_ids.append(max_token)
 
         if trie.is_function_complete(tokens_generated):
-            break
-    result = trie.get_fn_name(tokens_generated)
-    if result is None:
-        raise ValueError("No function found")
-    return result
+            return trie.get_fn_name(tokens_generated)
+
+    return None
 
 
 def generate_argument(
-    prompt: str, param_type: str, model: Small_LLM_Model, mapper:
-        VocabularyMapper) -> str | float:
+    prompt: str, param_type: str, model: Small_LLM_Model,
+    mapper: VocabularyMapper
+) -> str | float:
     """
     Generates a function argument constrained by a specific data type.
 
@@ -213,56 +221,66 @@ def generate_argument(
     Raises:
         ValueError: If an unsupported parameter type is provided.
     """
+
+    input_ids = model.encode(prompt)
+
     if param_type == "boolean":
         valid_tokens = [
-            mapper.str_to_token("true"),
-            mapper.str_to_token("false")
-        ]
-        inputs_ids = model.encode(prompt).tolist()[0]
-        logits = model.get_logits_from_input_ids(inputs_ids)
+            mapper.str_to_token("true"), mapper.str_to_token("false")]
+        logits = model.get_logits_from_input_ids(input_ids)
 
-        masked_logits = [float('-inf')] * len(logits)
+        masked_logits = [float("-inf")] * len(logits)
         for token_id in valid_tokens:
-            masked_logits[token_id] = logits[token_id]
+            if token_id != -1:
+                masked_logits[token_id] = logits[token_id]
 
         max_token = masked_logits.index(max(masked_logits))
-        return str(mapper.token_to_str(max_token))
+        return mapper.token_to_str(max_token) == "true"
 
     elif param_type == "number":
-        valid_tokens = []
-        for digit in range(10):
-            valid_tokens.extend(mapper.find_tokens_with_prefix(str(digit)))
-        valid_tokens.extend(mapper.find_tokens_with_prefix("."))
-
-        input_ids = model.encode(prompt).tolist()[0]
+        allowed_chars = set("0123456789.-")
         number_generated = []
-        while True:
+
+        for _ in range(20):
             logits = model.get_logits_from_input_ids(input_ids)
-            masked_logits = [float('-inf')] * len(logits)
-            for token_id in valid_tokens:
-                masked_logits[token_id] = logits[token_id]
-            max_token = masked_logits.index(max(masked_logits))
-            if max_token not in valid_tokens:
+            best_token = -1
+            best_logit = float('-inf')
+
+            for token_id, logit in enumerate(logits):
+                token_str = mapper.token_to_str(token_id)
+                if token_str and all(c in allowed_chars for c in token_str):
+                    if logit > best_logit:
+                        best_logit = logit
+                        best_token = token_id
+
+            if best_token == -1 or best_logit == float('-inf'):
                 break
-            else:
-                input_ids.append(max_token)
-                number_generated.append(max_token)
-        return float(model.decode(number_generated))
+
+            input_ids.append(best_token)
+            number_generated.append(best_token)
+
+        try:
+            return float(model.decode(number_generated).strip())
+        except ValueError:
+            return 0.0
 
     elif param_type == "string":
-        input_ids = model.encode(prompt).tolist()[0]
         string_generated = []
-        token_quote = mapper.str_to_token('"')
-
-        while True:
+        for _ in range(100):
             logits = model.get_logits_from_input_ids(input_ids)
             max_token = logits.index(max(logits))
+            token_str = mapper.token_to_str(max_token)
 
-            if max_token == token_quote:
+            if (
+                "\n" in token_str
+                or '"' in token_str
+                or "<|endoftext|>" in token_str
+            ):
                 break
-            else:
-                input_ids.append(max_token)
-                string_generated.append(max_token)
-        return str(model.decode(string_generated))
+
+            input_ids.append(max_token)
+            string_generated.append(max_token)
+
+        return model.decode(string_generated).strip()
     else:
         raise ValueError(f"Unknown parameter type: {param_type}")

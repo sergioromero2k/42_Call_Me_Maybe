@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from llm_sdk.llm_sdk import Small_LLM_Model
+from llm_sdk import Small_LLM_Model
 from src.constrained_dec import (
     generate_argument,
     select_function,
@@ -21,7 +21,8 @@ class FunctionCaller:
             self,
             model: Small_LLM_Model,
             mapper: VocabularyMapper,
-            trie: FunctionTrie, functions: list[FunctionDefinition]) -> None:
+            trie: FunctionTrie,
+            functions: list[FunctionDefinition]) -> None:
         """
         Initializes the generator with necessary LLM and decoding components.
 
@@ -29,7 +30,7 @@ class FunctionCaller:
             model: The LLM model instance.
             mapper: Utility to map between tokens and strings.
             trie: Prefix tree containing valid function names.
-            definitions: List of available function schemas.
+            functions: List of available function schemas.
         """
         self.model = model
         self.mapper = mapper
