@@ -69,7 +69,8 @@ class FunctionCaller:
         # Step 2: Generate each argument according to its defined type
         for param_name, param_type in selected_function.parameters.items():
             value = generate_argument(
-                prompt, param_type.type, self.model, self.mapper)
+                prompt, param_type.type, self.model, self.mapper,
+                param_name=param_name)
             args[param_name] = value
 
         return FunctionCallResult(prompt=prompt, name=fn_name, parameters=args)
