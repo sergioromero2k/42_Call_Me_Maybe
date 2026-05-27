@@ -273,7 +273,7 @@ def generate_argument(
 
     elif param_type == "number":
         _ = model.get_logits_from_input_ids(input_ids)
-        nums = re.findall(r"[-+]?\d+\.\d+|[-+]?\d+", prompt)        
+        nums = re.findall(r"[-+]?\d+\.\d+|[-+]?\d+", prompt)
         if nums:
             if (
                 param_name == "b"
@@ -287,7 +287,7 @@ def generate_argument(
                 return float(val_str)
             except ValueError:
                 return 0.0
-        return 0.0  
+        return 0.0
 
     elif param_type == "string":
         _ = model.get_logits_from_input_ids(input_ids)
