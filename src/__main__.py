@@ -92,8 +92,13 @@ def main() -> None:
     start = time.time()
     for test in tests:
         # Generate structured output using constrained decoding.
-        result = caller.call(test.prompt)
-        results.append(result.model_dump())
+        try:
+            result = caller.call(test.prompt)
+            results.append(result.model_dump())
+        except ValueError as e:
+            print(f"Skiping invalid prompt: {test.prompt} -> {e}")
+        except Exception as e:
+            print(f"Unexpected error with prompt: {test.prompt} -> {e}")
 
     elapsed = time.time() - start
     print(f"Tiempo total: {elapsed:.2f} segundos")

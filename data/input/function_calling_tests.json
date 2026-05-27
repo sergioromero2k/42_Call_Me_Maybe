@@ -31,5 +31,23 @@
   },
   {
     "prompt": "Substitute the word 'cat' with 'dog' in 'The cat sat on the mat with another cat'"
+  },
+  {
+    "prompt": ""
+  },
+  {
+    "prompt": "El cielo es azul y los pájaros cantan"
+  },
+  {
+    "prompt": "What is the sum of 100USD and 250EUR?"
+  },
+  {
+    "prompt": "Calculate the sum of a=5.5,b=4.5"
+  },
+  {
+    "prompt": "Replace 'cat' with \"dog\" in 'The cat sat'"
+  },
+  {
+    "prompt": "Add -15 and +3.14"
   }
 ]

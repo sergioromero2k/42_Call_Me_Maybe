@@ -179,6 +179,9 @@ def select_function(
     Returns:
         The selected function name as a string.
     """
+    if not prompt or prompt.strip() == "":
+        return None
+
     prompt_lower = prompt.lower()
     if "sum" in prompt_lower or "add" in prompt_lower:
         return "fn_add_numbers"
@@ -191,8 +194,13 @@ def select_function(
     if "greet" in prompt_lower or "hello" in prompt_lower:
         return "fn_greet"
 
-    input_ids = model.encode(prompt).tolist()[0]
-    logits = model.get_logits_from_input_ids(input_ids)
+    try:
+        input_ids = model.encode(prompt).tolist()[0]
+        if not input_ids:
+            return None
+        logits = model.get_logits_from_input_ids(input_ids)
+    except Exception:
+        return None
 
     current_node = trie.root
     available_functions = []
@@ -236,7 +244,24 @@ def generate_argument(
     param_name: str = "",
 ) -> Any:
     """Generates a function argument constrained by a specific data type."""
-    input_ids = model.encode(prompt).tolist()[0]
+
+    if not prompt or prompt.strip() == "":
+        if param_type == "boolean":
+            return True
+        elif param_type == "number":
+            return 0.0
+        return ""
+
+    try:
+        input_ids = model.encode(prompt).tolist()[0]
+        if not input_ids:
+            raise ValueError()
+    except Exception:
+        if param_type == "boolean":
+            return True
+        elif param_type == "number":
+            return 0.0
+        return ""
 
     if param_type == "boolean":
         _ = model.get_logits_from_input_ids(input_ids)
@@ -248,15 +273,21 @@ def generate_argument(
 
     elif param_type == "number":
         _ = model.get_logits_from_input_ids(input_ids)
-        numeros = re.findall(r"[-+]?\d*\.\d+|\d+", prompt)
-        if numeros:
+        nums = re.findall(r"[-+]?\d+\.\d+|[-+]?\d+", prompt)        
+        if nums:
             if (
                 param_name == "b"
                 or param_name == "b_val"
-            ) and len(numeros) > 1:
-                return float(numeros[1])
-            return float(numeros[0])
-        return 0.0
+            ) and len(nums) > 1:
+                val_str = nums[1]
+            else:
+                val_str = nums[0]
+
+            try:
+                return float(val_str)
+            except ValueError:
+                return 0.0
+        return 0.0  
 
     elif param_type == "string":
         _ = model.get_logits_from_input_ids(input_ids)
