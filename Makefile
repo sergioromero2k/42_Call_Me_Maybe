@@ -46,7 +46,7 @@ debug:
 
 clean:
 	@echo "$(RED)Cleaning up...$(RESET)"
-	rm -rf __pycache__ .pytest_cache .mypy_cache .uv [cite: 125, 127]
+	rm -rf __pycache__ .pytest_cache .mypy_cache .uv
 	find . -type d -name "__pycache__" -exec rm -rf {} +
 
 
