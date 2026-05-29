@@ -4,18 +4,33 @@ Models for function calling data validation using Pydantic.
 Ensures strict type checking for input definitions and output results.
 """
 
-from pydantic import BaseModel
-from typing import Dict, Any, Literal
+from typing import Dict, Any, List, Literal, Optional
+from pydantic import BaseModel, Field
 
 
-class ParameterType(BaseModel):
+class ParameterProperty(BaseModel):
     """
     Schema for defining the data type of a function parameter or return value.
 
     Attributes:
-        type: The allowed data type string (number, string, or boolean).
+        type: The allowed data type string (number, integer, string, etc).
+        description:
+        properties:
+        items:
+        enum:
     """
-    type: Literal["number", "string", "boolean"]
+    type: Literal["number", "string", "integer", "boolean", "object", "array"]
+    description: Optional[str] = None
+
+    properties: Optional[Dict[str, Any]] = None
+    items: Optional[Dict[str, Any]] = None
+    enum: Optional[List[Any]] = None
+
+
+class ParametersSchema(BaseModel):
+    type: Literal["object"]
+    properties: Dict[str, ParameterProperty]
+    required: List[str] = Field(default_factory=list)
 
 
 class FunctionDefinition(BaseModel):
@@ -27,21 +42,13 @@ class FunctionDefinition(BaseModel):
         description: A brief explanation of what the function does.
         parameters: A dictionary mapping parameter names
                     to their type definitions.
-        returns: The expected return type of the function.
     """
     name: str
     description: str
-    parameters: Dict[str, ParameterType]
-    returns: ParameterType
+    parameters: ParametersSchema
 
 
-class FunctionCallTest(BaseModel):
-    """
-    Represents an individual test case for function calling.
-
-    Attributes:
-        prompt: The natural language request to be processed by the LLM.
-    """
+class TestPrompt(BaseModel):
     prompt: str
 
 
@@ -53,10 +60,10 @@ class FunctionCallResult(BaseModel):
 
     Attributes:
         prompt: The original input prompt.
-        name: The name of the function identified by the model.
-        parameters: A dictionary of key-value pairs representing
+        fn_name: The name of the function identified by the model.
+        args: A dictionary of key-value pairs representing
                 the generated arguments.
     """
     prompt: str
-    name: str
-    parameters: Dict[str, Any]
+    fn_name: str
+    args: Dict[str, Any]
