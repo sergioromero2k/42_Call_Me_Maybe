@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import math
 from typing import Any, List, Optional
 from src.trie import FunctionTrie, TrieNode
 from src.models import FunctionDefinition
@@ -64,23 +65,26 @@ def build_trie(
 
 
 def select_function(
-    prompt: str, model: Any, tokenizer: Any, trie: FunctionTrie
-) -> Optional[str]:
+        prompt: str, model: Any,
+        tokenizer: Any, trie: FunctionTrie) -> Optional[str]:
     """
-    Evalutes the user prompt by obtaining initial logits from the model
+    Evaluates the user prompt by obtaining initial logits from the model
     and mathematically calculates which function has the
     highest probability score.
     """
 
+    # Si el prompt está vacío o solo tiene espacios, no hay nada que evaluar
     if not prompt or not prompt.strip():
         return None
 
+    # Si el trie no existe o su raíz está vacía, no hay funciones disponibles
     if trie is None or trie.root is None:
         return None
 
     if tokenizer is None:
         return None
 
+    # 1. Encode the prompt using our custom tokenizer
     try:
         input_ids = tokenizer.encode(prompt)
         if not input_ids:
@@ -89,6 +93,7 @@ def select_function(
         print(f"[select_function] Failed to encode prompt: {e}")
         return None
 
+    # 2. Get raw logits from the model using the encoded prompt
     try:
         if hasattr(model, "get_logits_from_input_ids"):
             logits = model.get_logits_from_input_ids(input_ids)
@@ -100,26 +105,40 @@ def select_function(
             logits = model.predict(input_ids)
         else:
             print(
-                "[select_function] Model does not support "
-                "any known logit extraction method."
-            )
+                "[select_function] Model does not support"
+                "any known logit extraction method.")
             return None
+
+        if not logits:
+            return None
+
+        if hasattr(logits, "tolist"):
+            logits = logits.tolist()
+
     except Exception as e:
         print(f"[select_function] Failed to get logits from model: {e}")
         return None
 
-    if not logits:
+    # 3. Normalize logits with softmax so all scores
+    # are comparable probabilities
+    # Without this, tokens with low ids always win regardless of the prompt
+    try:
+        max_l = max(logits)
+        exps = [math.exp(l - max_l) for l in logits]
+        total = sum(exps)
+        logits = [e / total for e in exps]
+    except Exception as e:
+        print(f"[select_function] Failed to normalize logits: {e}")
         return None
 
-    if hasattr(logits, "tolist"):
-        logits = logits.tolist()
-
+    # 4. Collect all available function names from the Trie
     available_functions = []
 
     def _collect_fns(node: TrieNode):
+        # If this node marks the end of a path and has a function name, save it
         if node.is_end_of_path and "fn_name" in node.meta:
             available_functions.append(node.meta["fn_name"])
-
+        # Keep traversing children recursively
         for child_node in node.children.values():
             _collect_fns(child_node)
 
@@ -135,25 +154,35 @@ def select_function(
     if not available_functions:
         return None
 
+    # 5. Score each function using the mean probability of its tokens
+    # Mean instead of sum avoids longer function names winning just by accumulation
     best_fn = None
     max_score = float("-inf")
 
     for fn_name in available_functions:
+
         try:
             fn_tokens = tokenizer.encode(fn_name)
             if not fn_tokens:
                 continue
         except Exception as e:
             print(
-                "[select_function] Failed to encode "
-                f"function name '{fn_name}': {e}")
+                f"[select_function] Failed to encode function name '{fn_name}': {e}")
             continue
 
         try:
-            score = sum(
-                float(logits[token]) for token in fn_tokens
+            valid_scores = [
+                float(logits[token])
+                for token in fn_tokens
                 if token < len(logits)
-            )
+            ]
+
+            if not valid_scores:
+                continue
+
+            # Mean probability — fair comparison regardless of function name length
+            score = sum(valid_scores) / len(valid_scores)
+
         except Exception as e:
             print(
                 f"[select_function] Failed to score function '{fn_name}': {e}")

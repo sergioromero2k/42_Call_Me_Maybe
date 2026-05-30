@@ -34,18 +34,10 @@ class ParametersSchema(BaseModel):
 
 
 class FunctionDefinition(BaseModel):
-    """
-    Represents the schema and metadata of a callable function.
-
-    Attributes:
-        name: The unique identifier of the function.
-        description: A brief explanation of what the function does.
-        parameters: A dictionary mapping parameter names
-                    to their type definitions.
-    """
     name: str
     description: str
-    parameters: ParametersSchema
+    parameters: Dict[str, Any] = Field(default_factory=dict)
+    returns: Optional[Dict[str, Any]] = None
 
 
 class TestPrompt(BaseModel):
