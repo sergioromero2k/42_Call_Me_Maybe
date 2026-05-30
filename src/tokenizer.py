@@ -61,6 +61,9 @@ class CustomTokenizer:
                         match_found = True
                         break
 
+                # Fallback: if no match was found for any substring
+                # starting at 'start'.
+                # Skip this character to avoid an infinite loop
                 if not match_found:
                     char = text[start]
                     if char in self.vocab:
@@ -91,16 +94,16 @@ class CustomTokenizer:
 
             # Reconstruct the string by looking up each ID in O(1) via inverse
             decoded_parts = []
-            for i, t_id in enumerate(token_ids):
+            for i, token_id in enumerate(token_ids):
                 # bool is a subclass of int in Python, must reject explicitly
-                if isinstance(t_id, bool) or not isinstance(t_id, int):
+                if isinstance(token_id, bool) or not isinstance(token_id, int):
                     print(
                         f"[CustomTokenizer.decode] Warning: invalid element"
                         f" at index {i}, skipping."
                     )
                     continue
 
-                decoded_parts.append(self.inverse_vocab.get(t_id, ""))
+                decoded_parts.append(self.inverse_vocab.get(token_id, ""))
 
             return "".join(decoded_parts)
 
