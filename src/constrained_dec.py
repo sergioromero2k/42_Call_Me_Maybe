@@ -1,56 +1,46 @@
 #!/usr/bin/env python3
 
 import math
+import re
 from typing import Any, List, Optional
-from src.trie import FunctionTrie, TrieNode
+from src.trie import FunctionTrie
 from src.models import FunctionDefinition
 
 
 def build_trie(
         functions: List[FunctionDefinition], tokenizer: Any) -> FunctionTrie:
-    """Build a FunctionTrie from a list of tokenized function definitions."""
 
-    # If the list is empty, no point iterating — return an empty Trie
     if not functions:
         return FunctionTrie()
 
-    # If there is no tokenizer we cannot process anything — fail fast
     if tokenizer is None:
         raise ValueError("[build_trie] Tokenizer cannot be None.")
 
-    # Create the Trie we will populate and eventually return
     trie = FunctionTrie()
 
     for function in functions:
 
-        # Skip anything that is not a FunctionDefinition — wrong type
         if not isinstance(function, FunctionDefinition):
             print(f"[build_trie] Invalid element skipped: {function!r}")
             continue
 
-        # Skip functions with no name or a name made of only whitespace
         if not function.name or not function.name.strip():
             print(
                 f"[build_trie] Function with empty name skipped: {function!r}")
             continue
 
-        # Try to convert the function name into token ids
-        # If the tokenizer fails for any reason, skip this function
         try:
             token_ids = tokenizer.encode(function.name)
         except Exception as e:
             print(f"[build_trie] Failed to tokenize '{function.name}': {e}")
             continue
 
-        # If encoding produced no tokens, there is nothing to insert
         if not token_ids:
             print(
                 f"[build_trie] Empty token list for "
                 f"'{function.name}', skipping.")
             continue
 
-        # Try to insert the token ids into the Trie
-        # If the Trie itself fails for any reason, skip this function
         try:
             trie.insert(token_ids, meta_data={"fn_name": function.name})
         except Exception as e:
@@ -59,140 +49,101 @@ def build_trie(
                 f" into trie: {e}")
             continue
 
-    # Return whatever the Trie managed to collect
-    # could be full, partial, or empty
     return trie
 
 
 def select_function(
         prompt: str, model: Any,
-        tokenizer: Any, trie: FunctionTrie) -> Optional[str]:
-    """
-    Evaluates the user prompt by obtaining initial logits from the model
-    and mathematically calculates which function has the
-    highest probability score.
-    """
+        tokenizer: Any, trie: FunctionTrie,
+        functions: List = None,
+        inference_tokenizer: Any = None) -> Optional[str]:
 
-    # Si el prompt está vacío o solo tiene espacios, no hay nada que evaluar
     if not prompt or not prompt.strip():
         return None
-
-    # Si el trie no existe o su raíz está vacía, no hay funciones disponibles
-    if trie is None or trie.root is None:
+    if trie is None or trie.root is None or tokenizer is None:
         return None
 
-    if tokenizer is None:
+    tok = inference_tokenizer if inference_tokenizer is not None else tokenizer
+
+    # Construir lista de funciones disponibles con descripciones
+    available_functions = []
+    fn_descriptions = {}
+    if functions:
+        for fn in functions:
+            if hasattr(fn, "name") and hasattr(fn, "description"):
+                available_functions.append(fn.name)
+                fn_descriptions[fn.name] = fn.description
+
+    if not available_functions:
         return None
 
-    # 1. Encode the prompt using our custom tokenizer
+    fn_list = "\n".join(
+        f"- {name}: {fn_descriptions[name]}"
+        for name in available_functions
+    )
+
+    prompt_message = (
+        f"Here are the available functions:\n{fn_list}\n\n"
+        f"Which function name best matches this request: \"{prompt}\"?\n"
+        f"Reply with only the function name."
+    )
+
+    # Prompt de chat Qwen — igual que tu amigo
+    chat_prompt = (
+        f"<|im_start|>user\n{prompt_message}<|im_end|>\n"
+        f"<|im_start|>assistant\n<think>\n\n</think>\n\n"
+    )
+
     try:
-        input_ids = tokenizer.encode(prompt)
-        if not input_ids:
+        if hasattr(tok, "encode") and \
+                "add_special_tokens" in tok.encode.__code__.co_varnames:
+            current_ids = tok.encode(chat_prompt, add_special_tokens=False)
+        else:
+            current_ids = tok.encode(chat_prompt)
+        if not current_ids:
             return None
     except Exception as e:
         print(f"[select_function] Failed to encode prompt: {e}")
         return None
 
-    # 2. Get raw logits from the model using the encoded prompt
-    try:
-        if hasattr(model, "get_logits_from_input_ids"):
-            logits = model.get_logits_from_input_ids(input_ids)
-        elif hasattr(model, "get_logits"):
-            logits = model.get_logits(input_ids)
-        elif callable(model):
-            logits = model(input_ids)
-        elif hasattr(model, "predict"):
-            logits = model.predict(input_ids)
-        else:
-            print(
-                "[select_function] Model does not support"
-                "any known logit extraction method.")
-            return None
+    # Navegar el trie token a token igual que tu amigo filtra por startswith
+    current_node = trie.root
 
-        if not logits:
-            return None
-
-        if hasattr(logits, "tolist"):
-            logits = logits.tolist()
-
-    except Exception as e:
-        print(f"[select_function] Failed to get logits from model: {e}")
-        return None
-
-    # 3. Normalize logits with softmax so all scores
-    # are comparable probabilities
-    # Without this, tokens with low ids always win regardless of the prompt
-    try:
-        max_l = max(logits)
-        exps = [math.exp(l - max_l) for l in logits]
-        total = sum(exps)
-        logits = [e / total for e in exps]
-    except Exception as e:
-        print(f"[select_function] Failed to normalize logits: {e}")
-        return None
-
-    # 4. Collect all available function names from the Trie
-    available_functions = []
-
-    def _collect_fns(node: TrieNode):
-        # If this node marks the end of a path and has a function name, save it
-        if node.is_end_of_path and "fn_name" in node.meta:
-            available_functions.append(node.meta["fn_name"])
-        # Keep traversing children recursively
-        for child_node in node.children.values():
-            _collect_fns(child_node)
-
-    try:
-        _collect_fns(trie.root)
-    except RecursionError:
-        print("[select_function] Trie has a cycle, recursion limit reached.")
-        return None
-    except Exception as e:
-        print(f"[select_function] Failed to collect functions from trie: {e}")
-        return None
-
-    if not available_functions:
-        return None
-
-    # 5. Score each function using the mean probability of its tokens
-    # Mean instead of sum avoids longer function names winning just by accumulation
-    best_fn = None
-    max_score = float("-inf")
-
-    for fn_name in available_functions:
+    while current_node and not current_node.is_end_of_path:
+        valid_next = current_node.children
+        if not valid_next:
+            break
 
         try:
-            fn_tokens = tokenizer.encode(fn_name)
-            if not fn_tokens:
-                continue
+            if hasattr(model, "get_logits_from_input_ids"):
+                logits = model.get_logits_from_input_ids(list(current_ids))
+            elif hasattr(model, "get_logits"):
+                logits = model.get_logits(list(current_ids))
+            elif callable(model):
+                logits = model(list(current_ids))
+            else:
+                return None
+
+            if hasattr(logits, "tolist"):
+                logits = logits.tolist()
+
+            # Elegir el token válido con mayor logit — igual que su sorted_tokens
+            best_token = max(
+                valid_next.keys(),
+                key=lambda t: logits[t] if t < len(logits) else float("-inf")
+            )
+
+            current_ids.append(best_token)
+            current_node = current_node.children[best_token]
+
         except Exception as e:
-            print(
-                f"[select_function] Failed to encode function name '{fn_name}': {e}")
-            continue
+            print(f"[select_function] Error during trie traversal: {e}")
+            break
 
-        try:
-            valid_scores = [
-                float(logits[token])
-                for token in fn_tokens
-                if token < len(logits)
-            ]
+    if current_node and current_node.is_end_of_path and "fn_name" in current_node.meta:
+        return current_node.meta["fn_name"]
 
-            if not valid_scores:
-                continue
-
-            # Mean probability — fair comparison regardless of function name length
-            score = sum(valid_scores) / len(valid_scores)
-
-        except Exception as e:
-            print(
-                f"[select_function] Failed to score function '{fn_name}': {e}")
-            continue
-
-        if score > max_score:
-            max_score = score
-            best_fn = fn_name
-
-    return best_fn
+    return None
 
 
 def generate_argument(
@@ -200,19 +151,15 @@ def generate_argument(
         param_type: str,
         model: Any,
         tokenizer: Any,
-        param_name: str = ""
+        param_name: str = "",
+        inference_tokenizer: Any = None,
+        function_def: Any = None,
+        previous_gen: str = ""
 ) -> Any:
     if not param_type:
         return ""
 
     if not prompt or not prompt.strip():
-        if param_type in ("number", "integer"):
-            return 0
-        if param_type == "boolean":
-            return True
-        return ""
-
-    if tokenizer is None:
         if param_type in ("number", "integer"):
             return 0
         if param_type == "boolean":
@@ -226,98 +173,141 @@ def generate_argument(
             return True
         return ""
 
-    try:
-        input_ids = tokenizer.encode(prompt)
-        if not input_ids:
-            raise ValueError("Empty input_ids after encoding prompt.")
+    tok = inference_tokenizer if inference_tokenizer is not None else tokenizer
 
-        if hasattr(model, "get_logits_from_input_ids"):
-            _ = model.get_logits_from_input_ids(input_ids)
-        elif hasattr(model, "get_logits"):
-            _ = model.get_logits(input_ids)
-        elif callable(model):
-            _ = model(input_ids)
-        elif hasattr(model, "predict"):
-            _ = model.predict(input_ids)
-        else:
-            print("[generate_argument] Model does not support "
-                  "any known logit extraction method.")
-    except Exception as e:
-        print(f"[generated_argument] Warning during model inference: {e}")
+    # Igual que tu amigo — acumula previous_gen + param_name=
+    prev = previous_gen + f"{param_name}="
 
-    try:
-        prompt_lower = prompt.lower()
-    except Exception as e:
-        print(f"[generate_argument] Failed to lowercase prompt: {e}")
-        prompt_lower = ""
+    prompt_message = (
+        f"To solve the prompt {prompt}, you will use the "
+        f"following function: {function_def}. Provide each parameter. "
+        f"Keep it concise and don't add custom fields."
+    )
+
+    full_prompt = (
+        f"<|im_start|>user\n{prompt_message}<|im_end|>\n"
+        f"<|im_start|>assistant\n<think>\n\n</think>\n\n{prev}"
+    )
 
     if param_type == "boolean":
-        try:
-            if "false" in prompt_lower:
-                return False
-            return True
-        except Exception as e:
-            print(f"[generate_argument] Failed to parse boolean: {e}")
-            return True
+        prompt_lower = prompt.lower()
+        return False if "false" in prompt_lower else True
 
     elif param_type in ("number", "integer"):
-        import re
+        argument_progress = ""
+        while True:
+            try:
+                if hasattr(tok, "encode") and \
+                        "add_special_tokens" in tok.encode.__code__.co_varnames:
+                    input_ids = tok.encode(
+                        full_prompt + argument_progress,
+                        add_special_tokens=False)
+                else:
+                    input_ids = tok.encode(full_prompt + argument_progress)
+
+                if hasattr(model, "get_logits_from_input_ids"):
+                    logits = model.get_logits_from_input_ids(input_ids)
+                elif hasattr(model, "get_logits"):
+                    logits = model.get_logits(input_ids)
+                else:
+                    break
+
+                if hasattr(logits, "tolist"):
+                    logits = logits.tolist()
+
+                sorted_token_ids = sorted(
+                    range(len(logits)),
+                    key=lambda i: logits[i],
+                    reverse=True
+                )
+
+                for token_id in sorted_token_ids:
+                    if hasattr(tok, "decode"):
+                        token_str = tok.decode([token_id])
+                    else:
+                        break
+
+                    if token_str == "":
+                        try:
+                            return float(argument_progress) \
+                                if param_type == "number" \
+                                else int(float(argument_progress))
+                        except ValueError:
+                            argument_progress = ""
+                            break
+
+                    valid_chars = "-0123456789.\n"
+                    if any(c not in valid_chars for c in token_str):
+                        continue
+                    if (argument_progress + token_str).count(".") >= 2:
+                        continue
+                    if (argument_progress + token_str).count("-") >= 2:
+                        continue
+                    if (argument_progress + token_str).count("-") == 1 \
+                            and (argument_progress + token_str)[0] != "-":
+                        continue
+
+                    argument_progress += token_str
+
+                    if "\n" in argument_progress:
+                        val = argument_progress.split("\n")[0]
+                        try:
+                            return float(val) if param_type == "number" \
+                                else int(float(val))
+                        except ValueError:
+                            argument_progress = ""
+                    break
+
+            except Exception as e:
+                print(f"[generate_argument] Error: {e}")
+                break
+
         try:
-            nums = re.findall(r"[-+]?\d+\.\d+|[-+]?\d+", prompt)
-            if not nums:
-                return 0
-
-            if (
-                param_name in ("b", "b_val", "replacement", "target")
-                and len(nums) > 1
-            ):
-                val_str = nums[1]
-            else:
-                val_str = nums[0]
-
-            if param_type == "integer":
-                return int(float(val_str))
-            return float(val_str)
-
-        except ValueError as e:
-            print(
-                "[generate_argument] Failed to convert "
-                f"'{val_str}' to number: {e}")
-            return 0
-        except Exception as e:
-            print(f"[generate_argument] Unexpected error parsing number: {e}")
+            return float(argument_progress) if param_type == "number" \
+                else int(float(argument_progress))
+        except ValueError:
             return 0
 
     elif param_type == "string":
-        import re
-        try:
-            quotes = re.findall(r"['\"]([^'\"]*)['\"]", prompt)
-            if quotes:
-                if param_name in ("replacement", "target") and len(quotes) > 1:
-                    return quotes[1].strip()
-                return quotes[0].strip()
+        argument_progress = ""
+        while "\n" not in argument_progress:
+            try:
+                if hasattr(tok, "encode") and \
+                        "add_special_tokens" in tok.encode.__code__.co_varnames:
+                    input_ids = tok.encode(
+                        full_prompt + argument_progress,
+                        add_special_tokens=False)
+                else:
+                    input_ids = tok.encode(
+                        full_prompt + argument_progress)
 
-            # Fallback — Last word clean of the prompt.
-            words = prompt.split()
-            if not words:
-                return ""
-            return (
-                words[-1]
-                .strip()
-                .rstrip(".")
-                .replace("'", "")
-                .replace("?", "")
-            )
+                if hasattr(model, "get_logits_from_input_ids"):
+                    logits = model.get_logits_from_input_ids(input_ids)
+                elif hasattr(model, "get_logits"):
+                    logits = model.get_logits(input_ids)
+                else:
+                    break
 
-        except Exception as e:
-            print(f"[generate_argument] Failed to parse string: {e}")
-            return ""
+                if hasattr(logits, "tolist"):
+                    logits = logits.tolist()
+
+                best_token_id = logits.index(max(logits))
+
+                if hasattr(tok, "decode"):
+                    token_str = tok.decode([best_token_id])
+                else:
+                    break
+
+                if token_str == "":
+                    break
+
+                argument_progress += token_str
+
+            except Exception as e:
+                print(f"[generate_argument] Error: {e}")
+                break
+
+        return argument_progress.split("\n")[0].strip()
 
     else:
-        try:
-            return {}
-        except Exception as e:
-            print(
-                "[generate_argument] Failed to return default "
-                f"for unknown type: {e}")
-            return {}
+        return {}

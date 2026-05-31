@@ -5,7 +5,8 @@ import json
 import os
 import argparse
 
-from typing import Any, List, Dict, Optional
+
+from typing import Any, List, Dict
 from llm_sdk import Small_LLM_Model
 
 from src.models import FunctionDefinition
@@ -15,13 +16,13 @@ from src.constrained_dec import build_trie, select_function, generate_argument
 
 def print_visual_step(step_name: str, status: str, details: str = "") -> None:
     """Helper for process visualization in the terminal."""
-    emoji = "⚙️"
+    emoji = "🕐​"
     if "OK" in status:
-        emoji = "✅"
+        emoji = "🆗​"
     elif "ERROR" in status:
-        emoji = "❌"
+        emoji = "​🎃"
     elif "RUN" in status:
-        emoji = "🚀"
+        emoji = "🎉​"
     print(f"[{emoji} {step_name:<20}] -> {status:<8} | {details}")
 
 
@@ -99,10 +100,10 @@ def main() -> None:
         print_visual_step("File Upload", "RUN", f"Reading {tests_file}")
         with open(tests_file, "r", encoding="utf-8") as f:
             raw_tests_data = json.load(f)
-            prompt = raw_tests_data[0]["prompt"]
     except Exception as e:
-        print_visual_step("File Upload", "ERROR",
-                          f"Could not read test prompt: {e}")
+        print_visual_step(
+            "File Upload", "ERROR",
+            f"Could not read test file: {e}")
         write_empty_output(output_path)
         sys.exit(1)
 
@@ -145,6 +146,8 @@ def main() -> None:
             print_visual_step("LLM Load", "OK", "Qwen Model instantiated.")
 
         elif model_type == "ollama":
+            import ollama
+
             print_visual_step(
                 "LLM Load", "RUN",
                 "Connecting to Ollama local API backend..."
@@ -152,7 +155,6 @@ def main() -> None:
 
             class OllamaAdapter:
                 def __init__(self) -> None:
-                    import ollama
                     self.client = ollama.Client()
 
                 def get_logits(self, input_ids: List[int]) -> List[float]:
@@ -203,12 +205,28 @@ def main() -> None:
         write_empty_output(output_path)
         sys.exit(1)
 
+    # Usar el tokenizer interno del modelo para scoring si está disponible
+    # Fallback al CustomTokenizer para compatibilidad con otros LLMs
+    if hasattr(model, "_tokenizer"):
+        inference_tokenizer = model._tokenizer
+        print_visual_step(
+            "Inference Tokenizer", "OK",
+            "Using model's internal tokenizer for scoring."
+        )
+    else:
+        inference_tokenizer = tokenizer
+        print_visual_step(
+            "Inference Tokenizer", "OK",
+            "Using CustomTokenizer as fallback."
+        )
+
     # STEP 6: Build the prefix Trie
     try:
         print_visual_step(
             "Construct Trie", "RUN",
             "Indexing function tokens...")
-        trie = build_trie(validated_functions, tokenizer)
+        trie = build_trie(validated_functions, inference_tokenizer)
+
         print_visual_step(
             "Trie Construction", "OK",
             "Numeric prefix tree ready.")
@@ -234,19 +252,25 @@ def main() -> None:
 
         # STEP 7: Constrained Decoding Phase 1 — Pure Function Selection
         try:
-            print_visual_step("Phase 1: Logits Fn", "RUN",
-                              "Evaluating function matching...")
-            # Pasamos el prompt limpio directamente para evitar sesgos en el LLM pequeño
+            print_visual_step(
+                "Phase 1: Logits Fn", "RUN",
+                f"Evaluating prompt: {current_prompt}...")
+
             selected_fn_name = select_function(
-                current_prompt, model, tokenizer, trie)
+                current_prompt, model,
+                tokenizer, trie,
+                functions=validated_functions,
+                inference_tokenizer=inference_tokenizer)
 
             if not selected_fn_name:
-                print_visual_step("Phase 1: Logits Fn",
-                                  "ERROR", "No function selected.")
+                print_visual_step(
+                    "Phase 1: Logits Fn",
+                    "ERROR", "No function selected.")
                 continue
 
-            print_visual_step("Phase 1: Logits Fn", "OK",
-                              f"Winner -> {selected_fn_name}")
+            print_visual_step(
+                "Phase 1: Logits Fn", "OK",
+                f"Winner -> {selected_fn_name}")
         except Exception as e:
             print_visual_step("Phase 1: Logits Fn", "ERROR", f"Failed: {e}")
             continue
@@ -255,36 +279,47 @@ def main() -> None:
         extracted_arguments: Dict[str, Any] = {}
         try:
             target_fn = next(
-                (fn for fn in validated_functions if fn.name == selected_fn_name), None)
+                (
+                    fn for fn in validated_functions
+                    if fn.name == selected_fn_name), None
+            )
 
             if target_fn and target_fn.parameters:
                 properties_dict = target_fn.parameters
-                print_visual_step("Phase 2: Arguments",
-                                  "RUN", "Extracting values...")
+                print_visual_step(
+                    "Phase 2: Arguments",
+                    "RUN", "Extracting values...")
 
+                previous_gen = ""
                 for param_name, param_prop in properties_dict.items():
                     param_type = param_prop.get("type", "string")
 
-                    # Un formato mínimo, directo y nativo que el modelo entiende al vuelo
-                    # para saber qué variable concreta tiene que rellenar
-                    arg_prompt = f"{current_prompt}\nExtract {param_name}:"
-
                     val = generate_argument(
-                        prompt=arg_prompt,
+                        prompt=current_prompt,
                         param_type=param_type,
                         model=model,
                         tokenizer=tokenizer,
                         param_name=param_name,
+                        inference_tokenizer=inference_tokenizer,
+                        function_def=str(target_fn),
+                        previous_gen=previous_gen,
                     )
                     extracted_arguments[param_name] = val
-                    print_visual_step("Phase 2: Arguments",
-                                      "OK", f"↳ [{param_name}] -> {repr(val)}")
+
+                    # Acumular como hace tu amigo
+                    previous_gen += f"{param_name}={str(val)}\n"
+
+                    print_visual_step(
+                        "Phase 2: Arguments",
+                        "OK", f"↳ [{param_name}] -> {repr(val)}")
             else:
-                print_visual_step("Phase 2: Arguments", "OK",
-                                  "No parameters required.")
+                print_visual_step(
+                    "Phase 2: Arguments", "OK",
+                    "No parameters required.")
         except Exception as e:
-            print_visual_step("Phase 2: Arguments", "ERROR",
-                              f"Extraction failed: {e}")
+            print_visual_step(
+                "Phase 2: Arguments", "ERROR",
+                f"Extraction failed: {e}")
 
         # Guardamos el resultado de este test
         all_results.append({
