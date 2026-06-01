@@ -179,8 +179,9 @@ def generate_argument(
     prev = previous_gen + f"{param_name}="
 
     prompt_message = (
-        f"To solve the prompt {prompt}, you will use the "
-        f"following function: {function_def}. Provide each parameter. "
+        f"To solve the prompt: {prompt}\n"
+        f"Function to use: {function_def}\n"
+        f"Provide ONLY the parameter values, no function names.\n"
         f"Keep it concise and don't add custom fields."
     )
 
