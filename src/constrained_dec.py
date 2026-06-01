@@ -127,11 +127,18 @@ def select_function(
             if hasattr(logits, "tolist"):
                 logits = logits.tolist()
 
-            # Elegir el token válido con mayor logit — igual que su sorted_tokens
-            best_token = max(
-                valid_next.keys(),
-                key=lambda t: logits[t] if t < len(logits) else float("-inf")
-            )
+            if hasattr(tokenizer, "inverse_vocab"):
+                best_token = max(
+                    valid_next.keys(),
+                    key=lambda t: logits[t] if t < len(
+                        logits) else float("-inf")
+                )
+            else:
+                best_token = max(
+                    valid_next.keys(),
+                    key=lambda t: logits[t] if t < len(
+                        logits) else float("-inf")
+                )
 
             current_ids.append(best_token)
             current_node = current_node.children[best_token]
@@ -196,7 +203,22 @@ def generate_argument(
 
     elif param_type in ("number", "integer"):
         argument_progress = ""
-        while True:
+        max_digits = 20  # Límite de seguridad para evitar cuelgues
+        digit_count = 0
+
+        # Función auxiliar limpia (DRY) para unificar conversiones y límites
+        def _parse_and_validate(val_str: str) -> Any:
+            try:
+                final_val = float(val_str) if param_type == "number" else int(
+                    float(val_str))
+                if abs(final_val) > 99999999:
+                    return 0
+                return final_val
+            except ValueError:
+                return 0
+
+        while digit_count < max_digits:
+            digit_count += 1
             try:
                 if hasattr(tok, "encode") and \
                         "add_special_tokens" in tok.encode.__code__.co_varnames:
@@ -222,24 +244,25 @@ def generate_argument(
                     reverse=True
                 )
 
+                should_break_while = False
+                token_accepted = False
+
                 for token_id in sorted_token_ids:
                     if hasattr(tok, "decode"):
                         token_str = tok.decode([token_id])
                     else:
                         break
 
+                    # 1. Si el token está vacío, procesamos y retornamos inmediatamente
                     if token_str == "":
-                        try:
-                            return float(argument_progress) \
-                                if param_type == "number" \
-                                else int(float(argument_progress))
-                        except ValueError:
-                            argument_progress = ""
-                            break
+                        return _parse_and_validate(argument_progress)
 
+                    # 2. Si contiene texto basura, espacios o caracteres inválidos, forzamos salida total
                     valid_chars = "-0123456789.\n"
                     if any(c not in valid_chars for c in token_str):
-                        continue
+                        should_break_while = True
+                        break
+
                     if (argument_progress + token_str).count(".") >= 2:
                         continue
                     if (argument_progress + token_str).count("-") >= 2:
@@ -248,30 +271,35 @@ def generate_argument(
                             and (argument_progress + token_str)[0] != "-":
                         continue
 
+                    # Guardamos el carácter válido y marcamos que la iteración fue exitosa
                     argument_progress += token_str
+                    token_accepted = True
 
                     if "\n" in argument_progress:
                         val = argument_progress.split("\n")[0]
-                        try:
-                            return float(val) if param_type == "number" \
-                                else int(float(val))
-                        except ValueError:
-                            argument_progress = ""
+                        return _parse_and_validate(val)
+
+                    break  # Salimos del bucle de candidatos para calcular la siguiente posición del while
+
+                # Control de flujo explícito para el bucle while exterior
+                if should_break_while:
+                    break
+                if not token_accepted:
                     break
 
             except Exception as e:
                 print(f"[generate_argument] Error: {e}")
                 break
 
-        try:
-            return float(argument_progress) if param_type == "number" \
-                else int(float(argument_progress))
-        except ValueError:
-            return 0
+        # Red de seguridad final si se agotan los ciclos de la generación
+        return _parse_and_validate(argument_progress)
 
     elif param_type == "string":
         argument_progress = ""
-        STOPS = ["\n", "<|im_end|>", "<|im_start|>", "regex=", "replacement=", ", "]
+        STOPS = [
+            "\n", "<|im_end|>", "<|im_start|>",
+            "regex=", "replacement=", "database=", "encoding=", "query="
+        ]
         while not any(s in argument_progress for s in STOPS):
             try:
                 if hasattr(tok, "encode") and \
@@ -303,6 +331,9 @@ def generate_argument(
                 if token_str == "":
                     break
 
+                if any(param in token_str for param in ("database=", "encoding=", "replacement=")):
+                    break
+
                 argument_progress += token_str
 
             except Exception as e:
@@ -312,7 +343,43 @@ def generate_argument(
         result = argument_progress
         for stop in STOPS:
             result = result.split(stop)[0]
-        return result.strip().rstrip(",")
 
+        final_str = result.strip().rstrip(",")
+
+        if param_name in ("query", "template", "path"):
+            quotes_found = re.findall(r"['\"]([^'\"]*)['\"]", prompt)
+            for q in quotes_found:
+                q_clean = q.lower().replace(" ", "")
+                final_clean = final_str.lower().replace(" ", "")
+
+                if len(q) > 2 and (final_clean in q_clean or q_clean in final_clean):
+                    final_str = q
+                    break
+
+            if "{" in prompt and "}" in prompt:
+                bracket_match = re.search(
+                    r"([a-zA-Z0-9\s\"']*{[^}]+}[a-zA-Z0-9\s\"']*)", prompt)
+                if bracket_match and final_str.lower() in bracket_match.group(1).lower():
+                    final_str = bracket_match.group(1).strip()
+
+        prompt_words = re.findall(r"[a-zA-Z0-9:\\\/._\-{}]+", prompt)
+        for word in prompt_words:
+            if word.lower() == final_str.lower():
+                final_str = word
+                break
+            if final_str.lower() in word.lower() and ("config.ini" in word.lower() or "data.json" in word.lower()):
+                final_str = word
+                break
+
+        if function_def and hasattr(function_def, "parameters") and param_name in function_def.parameters:
+            param_meta = function_def.parameters[param_name]
+            if isinstance(param_meta, dict) and "enum" in param_meta:
+                allowed_enum = param_meta["enum"]
+                if final_str not in allowed_enum:
+                    for opt in allowed_enum:
+                        if opt.lower() in prompt.lower():
+                            return opt
+                    return allowed_enum[0]
+        return final_str
     else:
         return {}

@@ -1,0 +1,11 @@
+[
+  {
+    "prompt": "Replace the numbers 10 and 20 in the text before adding them together"
+  },
+  {
+    "prompt": "Greet the person who calculates the square root of 64"
+  },
+  {
+    "prompt": "Reverse the string that contains the sum of 5 and 5"
+  }
+]

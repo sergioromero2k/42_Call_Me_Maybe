@@ -56,6 +56,11 @@ clean:
 	rm -rf __pycache__ .pytest_cache .mypy_cache .uv
 	find . -type d -name "__pycache__" -exec rm -rf {} +
 
+fclean:
+	@echo "$(BLUE)Cleaning up...$(RESET)"
+	rm -rf __pycache__ .pytest_cache .mypy_cache .uv
+	find . -type d -name "__pycache__" -exec rm -rf {} +
+
 
 # --- Linting (Code Quality) ---
 lint:

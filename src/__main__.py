@@ -30,7 +30,7 @@ def write_empty_output(output_path: str) -> None:
     """Writes a default empty JSON schema to output_path in case of failure."""
     try:
         with open(output_path, "w", encoding="utf-8") as f:
-            json.dump({"function": "", "arguments": {}}, f)
+            json.dump([{"prompt": "", "fn_name": "", "args": {}}], f)
     except Exception as e:
         print_visual_step(
             "Saving Output", "ERROR", f"Could not write empty output: {e}"
@@ -324,8 +324,8 @@ def main() -> None:
         # Guardamos el resultado de este test
         all_results.append({
             "prompt": current_prompt,
-            "function": selected_fn_name,
-            "arguments": extracted_arguments
+            "name": selected_fn_name,
+            "parameters": extracted_arguments
         })
 
     # =========================================================================

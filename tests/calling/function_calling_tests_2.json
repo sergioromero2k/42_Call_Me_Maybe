@@ -1,0 +1,11 @@
+[
+  {
+    "prompt": "Add the number twenty and the value thirty"
+  },
+  {
+    "prompt": "What is the sum of NaN and undefined?"
+  },
+  {
+    "prompt": "Calculate the square root of a negative text like 'sixteen'"
+  }
+]
