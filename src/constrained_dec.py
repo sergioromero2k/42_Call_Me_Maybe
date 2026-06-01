@@ -270,7 +270,8 @@ def generate_argument(
 
     elif param_type == "string":
         argument_progress = ""
-        while "\n" not in argument_progress:
+        STOPS = ["\n", "<|im_end|>", "<|im_start|>", "regex=", "replacement=", ", "]
+        while not any(s in argument_progress for s in STOPS):
             try:
                 if hasattr(tok, "encode") and \
                         "add_special_tokens" in tok.encode.__code__.co_varnames:
@@ -307,7 +308,10 @@ def generate_argument(
                 print(f"[generate_argument] Error: {e}")
                 break
 
-        return argument_progress.split("\n")[0].strip()
+        result = argument_progress
+        for stop in STOPS:
+            result = result.split(stop)[0]
+        return result.strip().rstrip(",")
 
     else:
         return {}

@@ -18,11 +18,11 @@ def print_visual_step(step_name: str, status: str, details: str = "") -> None:
     """Helper for process visualization in the terminal."""
     emoji = "🕐​"
     if "OK" in status:
-        emoji = "🆗​"
+        emoji = "🟩​​"
     elif "ERROR" in status:
-        emoji = "​🎃"
+        emoji = "​​🟥​"
     elif "RUN" in status:
-        emoji = "🎉​"
+        emoji = "🟨​​"
     print(f"[{emoji} {step_name:<20}] -> {status:<8} | {details}")
 
 
@@ -332,6 +332,7 @@ def main() -> None:
     # STEP 9: Write all results to the final output file
     # =========================================================================
     try:
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(all_results, f, indent=4, ensure_ascii=False)
         print("\n" + "=" * 60)
