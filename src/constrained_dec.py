@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import math
 import re
 from typing import Any, List, Optional
 from src.trie import FunctionTrie
@@ -9,6 +8,23 @@ from src.models import FunctionDefinition
 
 def build_trie(
         functions: List[FunctionDefinition], tokenizer: Any) -> FunctionTrie:
+    """Builds a token-level trie from a list of function definitions.
+
+    Encodes each function name into token IDs using the provided tokenizer
+    and inserts them into a FunctionTrie. Invalid or empty entries are
+    skipped with a warning. The resulting trie is used to constrain
+    model generation to valid function names during inference.
+
+    Args:
+        functions: A list of FunctionDefinition objects to index.
+        tokenizer: A tokenizer instance with an encode() method.
+
+    Returns:
+        A FunctionTrie populated with token paths for each valid function name.
+
+    Raises:
+        ValueError: If tokenizer is None.
+    """
 
     if not functions:
         return FunctionTrie()
@@ -57,6 +73,30 @@ def select_function(
         tokenizer: Any, trie: FunctionTrie,
         functions: List = None,
         inference_tokenizer: Any = None) -> Optional[str]:
+    """Selects the best matching function name for a given user prompt.
+
+    Builds a structured chat prompt describing the available functions,
+    encodes it into token IDs, and navigates the function trie token by
+    token. At each step, the model's logits are used to pick the most
+    probable next token among the valid trie children, constraining the
+    output to existing function names only.
+
+    Args:
+        prompt: The user request describing the desired action.
+        model: A language model exposing logits via get_logits_from_input_ids,
+            get_logits, or as a callable.
+        tokenizer: A tokenizer used to encode the prompt and check
+            trie compatibility.
+        trie: A FunctionTrie built from the available function names.
+        functions: A list of FunctionDefinition objects with name and
+            description attributes.
+        inference_tokenizer: An optional alternative tokenizer to use
+            during generation. Falls back to tokenizer if None.
+
+    Returns:
+        The name of the best matching function as a string, or None if
+        no valid function could be selected.
+    """
 
     if not prompt or not prompt.strip():
         return None
@@ -65,7 +105,6 @@ def select_function(
 
     tok = inference_tokenizer if inference_tokenizer is not None else tokenizer
 
-    # Construir lista de funciones disponibles con descripciones
     available_functions = []
     fn_descriptions = {}
     if functions:
@@ -88,7 +127,6 @@ def select_function(
         f"Reply with only the function name."
     )
 
-    # Prompt de chat Qwen — igual que tu amigo
     chat_prompt = (
         f"<|im_start|>user\n{prompt_message}<|im_end|>\n"
         f"<|im_start|>assistant\n<think>\n\n</think>\n\n"
@@ -106,7 +144,6 @@ def select_function(
         print(f"[select_function] Failed to encode prompt: {e}")
         return None
 
-    # Navegar el trie token a token igual que tu amigo filtra por startswith
     current_node = trie.root
 
     while current_node and not current_node.is_end_of_path:
@@ -147,7 +184,9 @@ def select_function(
             print(f"[select_function] Error during trie traversal: {e}")
             break
 
-    if current_node and current_node.is_end_of_path and "fn_name" in current_node.meta:
+    if (current_node
+            and current_node.is_end_of_path
+            and "fn_name" in current_node.meta):
         return current_node.meta["fn_name"]
 
     return None
