@@ -15,7 +15,19 @@ from src.constrained_dec import build_trie, select_function, generate_argument
 
 
 def print_visual_step(step_name: str, status: str, details: str = "") -> None:
-    """Helper for process visualization in the terminal."""
+    """Prints a formatted status line to the terminal
+    for process visualization.
+
+    Selects an emoji based on the status value and prints a fixed-width
+    line showing the step name, status, and optional details.
+
+    Args:
+        step_name: A short label identifying the current pipeline step.
+        status: The current state of the step. Use 'OK', 'ERROR', or
+            'RUN' to trigger the corresponding emoji.
+        details: Optional additional context to display alongside the
+            status. Defaults to an empty string.
+    """
     emoji = "🕐​"
     if "OK" in status:
         emoji = "🟩​​"
@@ -27,7 +39,15 @@ def print_visual_step(step_name: str, status: str, details: str = "") -> None:
 
 
 def write_empty_output(output_path: str) -> None:
-    """Writes a default empty JSON schema to output_path in case of failure."""
+    """Writes a default empty result to the output file on pipeline failure.
+
+    Called when a critical error prevents normal execution, ensuring the
+    output file always exists with a valid JSON structure.
+
+    Args:
+        output_path: The file path where the empty JSON result will be
+            written.
+    """
     try:
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump([{"prompt": "", "fn_name": "", "args": {}}], f)
@@ -38,7 +58,25 @@ def write_empty_output(output_path: str) -> None:
 
 
 def main() -> None:
-    # STEP 1: CLI arguments validation — compliant with subject IV.3.2
+    """Entry point for the constrained decoding engine.
+
+    Orchestrates the full function calling pipeline across nine steps:
+
+    1. Parses CLI arguments for input path, output path, and model type.
+    2. Loads the function definitions JSON file from the input directory.
+    3. Loads the test prompts JSON file from the input directory.
+    4. Validates each function definition using Pydantic models.
+    5. Initializes the language model backend (Qwen or Ollama).
+    6. Loads the custom tokenizer from the model's vocabulary file.
+    7. Builds a token-level prefix trie from the validated functions.
+    8. Iterates over all test prompts, running constrained decoding in
+       two phases: function selection via trie traversal, followed by
+       argument extraction per parameter type.
+    9. Writes all results to the output JSON file.
+
+    Exits with code 1 on any unrecoverable error, writing an empty
+    output file before terminating.
+    """
     parser = argparse.ArgumentParser(
         description="Constrained Decoding Engine for Function Calling"
     )
@@ -140,7 +178,7 @@ def main() -> None:
                 "LLM Load", "RUN",
                 "Instantiating default Small_LLM_Model (Qwen)..."
             )
-            model = Small_LLM_Model()
+            model: Any = Small_LLM_Model()
             if hasattr(model, "get_path_to_vocab_file"):
                 fallback_vocab_path = model.get_path_to_vocab_file()
             print_visual_step("LLM Load", "OK", "Qwen Model instantiated.")
@@ -154,13 +192,43 @@ def main() -> None:
             )
 
             class OllamaAdapter:
+                """A lightweight wrapper around the Ollama
+                client for logit generation.
+
+                Adapts the Ollama API to the interface
+                expected by the constrained
+                decoding engine, returning a placeholder
+                logits vector since Ollama
+                does not expose raw model logits.
+
+                Attributes:
+                    client: An instance of the Ollama client
+                    used to connect to the
+                        local Ollama API backend.
+                """
                 def __init__(self) -> None:
                     self.client = ollama.Client()
 
                 def get_logits(self, input_ids: List[int]) -> List[float]:
-                    """Return placeholder
-                    logits vector matching vocabulary
-                    size to prevent IndexErrors."""
+                    """Returns a placeholder logits vector of
+                    fixed vocabulary size.
+                    Since Ollama does not expose raw logits,
+                    this method returns a
+                    uniform vector to prevent IndexErrors
+                    during trie traversal.
+                    Constrained decoding will still work
+                    but function selection will
+                    be arbitrary rather than probability-driven.
+
+                    Args:
+                        input_ids: A list of token IDs representing the current
+                            input sequence. Not used in this implementation.
+
+                    Returns:
+                        A list of 32000 float values set to 0.1,
+                        matching a typical
+                        model vocabulary size.
+                    """
                     try:
                         return [0.1] * 32000
                     except Exception as e:
@@ -195,7 +263,7 @@ def main() -> None:
             "Manual Tokenizer", "RUN",
             f"Loading vocabulary from: {vocab_path}"
         )
-        tokenizer = CustomTokenizer(vocab_path)
+        tokenizer: Any = CustomTokenizer(vocab_path)
         print_visual_step("Manual Tokenizer", "OK", "Vocabulary initialized.")
     except Exception as e:
         print_visual_step(
@@ -238,9 +306,7 @@ def main() -> None:
         write_empty_output(output_path)
         sys.exit(1)
 
-    # =========================================================================
     # Bucle optimizado para procesar todos los prompts reales de la escuela
-    # =========================================================================
     all_results = []
 
     for idx, test_case in enumerate(raw_tests_data):
@@ -328,9 +394,7 @@ def main() -> None:
             "parameters": extracted_arguments
         })
 
-    # =========================================================================
     # STEP 9: Write all results to the final output file
-    # =========================================================================
     try:
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         with open(output_path, "w", encoding="utf-8") as f:

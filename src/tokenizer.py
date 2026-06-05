@@ -6,9 +6,27 @@ from typing import Dict, List
 
 
 class CustomTokenizer:
-    def __init__(self, vocab_path: str):
-        """
-        Initializes the tokenizer by loading the model vocabulary from a file.
+    """A lightweight tokenizer built from a vocabulary JSON file.
+
+    Loads a word-to-ID mapping from disk and provides encode and decode
+    methods compatible with the constrained decoding engine. Used as a
+    fallback when the model's internal tokenizer is not available.
+
+    Attributes:
+        vocab: A dictionary mapping token strings to integer IDs.
+        inverse_vocab: A dictionary mapping integer IDs back to token
+            strings, built automatically from vocab for O(1) decoding.
+    """
+    def __init__(self, vocab_path: str) -> None:
+        """Initializes the tokenizer by loading the vocabulary from a file.
+
+        Args:
+            vocab_path: Path to a JSON file containing a word-to-ID mapping.
+
+        Raises:
+            TypeError: If vocab_path is not a string.
+            FileNotFoundError: If the vocabulary file does not exist.
+            Exception: If the file cannot be parsed or loaded.
         """
         if not isinstance(vocab_path, str):
             raise TypeError(
@@ -34,7 +52,24 @@ class CustomTokenizer:
             raise
 
     def encode(self, text: str) -> List[int]:
-        """ """
+        """Encodes a string into a list of token IDs.
+
+        Uses a greedy longest-match strategy, scanning left to right and
+        always matching the longest possible substring found in the
+        vocabulary. Falls back to single character lookup if no match
+        is found, skipping unknown characters to avoid infinite loops.
+
+        Args:
+            text: The input string to tokenize.
+
+        Returns:
+            A list of integer token IDs. Returns an empty list if the
+            input is empty or an error occurs.
+
+        Raises:
+            TypeError: If text is not a string.
+            ValueError: If text is None.
+        """
         try:
             if text is None:
                 raise ValueError("Text to encode cannot be None")
@@ -80,8 +115,21 @@ class CustomTokenizer:
             return []
 
     def decode(self, token_ids: List[int]) -> str:
-        """
-        Decodes a list of token IDs back into a human-readable string.
+        """Decodes a list of token IDs back into a human-readable string.
+
+        Looks up each token ID in the inverse vocabulary and joins the
+        results. Invalid or unknown token IDs are skipped with a warning.
+
+        Args:
+            token_ids: A list of integer token IDs to decode.
+
+        Returns:
+            The reconstructed string. Returns an empty string if the
+            input is invalid or an error occurs.
+
+        Raises:
+            TypeError: If token_ids is not a list.
+            ValueError: If token_ids is None.
         """
         try:
             if token_ids is None:

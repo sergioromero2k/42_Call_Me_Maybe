@@ -71,10 +71,10 @@ def build_trie(
 def select_function(
         prompt: str, model: Any,
         tokenizer: Any, trie: FunctionTrie,
-        functions: List = None,
-        inference_tokenizer: Any = None) -> Optional[str]:
+        functions: Optional[List[Any]] = None,
+        inference_tokenizer: Any = None
+        ) -> Optional[str]:
     """Selects the best matching function name for a given user prompt.
-
     Builds a structured chat prompt describing the available functions,
     encodes it into token IDs, and navigates the function trie token by
     token. At each step, the model's logits are used to pick the most
@@ -179,7 +179,7 @@ def select_function(
     if (current_node
             and current_node.is_end_of_path
             and "fn_name" in current_node.meta):
-        return current_node.meta["fn_name"]
+        return str(current_node.meta["fn_name"])
 
     return None
 
@@ -283,9 +283,7 @@ def generate_argument(
                 if (hasattr(tok, "encode") and
                         "add_special_tokens" in
                         tok.encode.__code__.co_varnames):
-                    input_ids = tok.encode(
-                        full_prompt + argument_progress,
-                        add_special_tokens=False)
+                    input_ids = tok.encode(...)
                 else:
                     input_ids = tok.encode(full_prompt + argument_progress)
 
@@ -314,11 +312,9 @@ def generate_argument(
                     else:
                         break
 
-                    # 1. Si el token está vacío, procesamos y retornamos inmediatamente
                     if token_str == "":
                         return _parse_and_validate(argument_progress)
 
-                    # 2. Si contiene texto basura, espacios o caracteres inválidos, forzamos salida total
                     valid_chars = "-0123456789.\n"
                     if any(c not in valid_chars for c in token_str):
                         should_break_while = True
@@ -332,7 +328,6 @@ def generate_argument(
                             and (argument_progress + token_str)[0] != "-":
                         continue
 
-                    # Guardamos el carácter válido y marcamos que la iteración fue exitosa
                     argument_progress += token_str
                     token_accepted = True
 
@@ -340,9 +335,8 @@ def generate_argument(
                         val = argument_progress.split("\n")[0]
                         return _parse_and_validate(val)
 
-                    break  # Salimos del bucle de candidatos para calcular la siguiente posición del while
+                    break
 
-                # Control de flujo explícito para el bucle while exterior
                 if should_break_while:
                     break
                 if not token_accepted:
@@ -352,7 +346,6 @@ def generate_argument(
                 print(f"[generate_argument] Error: {e}")
                 break
 
-        # Red de seguridad final si se agotan los ciclos de la generación
         return _parse_and_validate(argument_progress)
 
     elif param_type == "string":
@@ -363,11 +356,14 @@ def generate_argument(
         ]
         while not any(s in argument_progress for s in STOPS):
             try:
-                if hasattr(tok, "encode") and \
-                        "add_special_tokens" in tok.encode.__code__.co_varnames:
+                if (
+                    hasattr(tok, "encode")
+                    and "add_special_tokens" in tok.encode.__code__.co_varnames
+                ):
                     input_ids = tok.encode(
                         full_prompt + argument_progress,
-                        add_special_tokens=False)
+                        add_special_tokens=False,
+                    )
                 else:
                     input_ids = tok.encode(
                         full_prompt + argument_progress)
@@ -392,7 +388,9 @@ def generate_argument(
                 if token_str == "":
                     break
 
-                if any(param in token_str for param in ("database=", "encoding=", "replacement=")):
+                if any(
+                    param in token_str for param in (
+                        "database=", "encoding=", "replacement=")):
                     break
 
                 argument_progress += token_str
@@ -413,14 +411,21 @@ def generate_argument(
                 q_clean = q.lower().replace(" ", "")
                 final_clean = final_str.lower().replace(" ", "")
 
-                if len(q) > 2 and (final_clean in q_clean or q_clean in final_clean):
+                match = (final_clean in q_clean or q_clean in final_clean)
+                if len(q) > 2 and match:
                     final_str = q
                     break
 
             if "{" in prompt and "}" in prompt:
                 bracket_match = re.search(
-                    r"([a-zA-Z0-9\s\"']*{[^}]+}[a-zA-Z0-9\s\"']*)", prompt)
-                if bracket_match and final_str.lower() in bracket_match.group(1).lower():
+                    r'([a-zA-Z0-9\s"\']*{[^}]+}[a-zA-Z0-9\s"\']*)',
+                    prompt,
+                )
+                if (
+                    bracket_match
+                    and final_str.lower()
+                    in bracket_match.group(1).lower()
+                ):
                     final_str = bracket_match.group(1).strip()
 
         prompt_words = re.findall(r"[a-zA-Z0-9:\\\/._\-{}]+", prompt)
@@ -428,19 +433,28 @@ def generate_argument(
             if word.lower() == final_str.lower():
                 final_str = word
                 break
-            if final_str.lower() in word.lower() and ("config.ini" in word.lower() or "data.json" in word.lower()):
+
+            if (
+                final_str.lower() in word.lower()
+                and (
+                    "config.ini" in word.lower()
+                    or "data.json" in word.lower()
+                )
+            ):
                 final_str = word
                 break
 
-        if function_def and hasattr(function_def, "parameters") and param_name in function_def.parameters:
-            param_meta = function_def.parameters[param_name]
-            if isinstance(param_meta, dict) and "enum" in param_meta:
-                allowed_enum = param_meta["enum"]
-                if final_str not in allowed_enum:
-                    for opt in allowed_enum:
-                        if opt.lower() in prompt.lower():
-                            return opt
-                    return allowed_enum[0]
+            if (function_def
+                    and hasattr(function_def, "parameters")
+                    and param_name in function_def.parameters):
+                param_meta = function_def.parameters[param_name]
+                if isinstance(param_meta, dict) and "enum" in param_meta:
+                    allowed_enum = param_meta["enum"]
+                    if final_str not in allowed_enum:
+                        for opt in allowed_enum:
+                            if opt.lower() in prompt.lower():
+                                return opt
+                        return allowed_enum[0]
         return final_str
     else:
         return {}

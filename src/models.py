@@ -28,12 +28,36 @@ class ParameterProperty(BaseModel):
 
 
 class ParametersSchema(BaseModel):
+    """Schema definition for a function's parameters block.
+
+    Attributes:
+        type: Always 'object', as required by the JSON Schema spec.
+        properties: A mapping of parameter names to their property
+            definitions, including type, description, and constraints.
+        required: A list of parameter names that are mandatory.
+            Defaults to an empty list.
+    """
     type: Literal["object"]
     properties: Dict[str, ParameterProperty]
     required: List[str] = Field(default_factory=list)
 
 
 class FunctionDefinition(BaseModel):
+    """Represents a callable function available to the model.
+
+    Used to validate and store function metadata loaded from the
+    functions_definition.json file. Each instance describes one
+    function the constrained decoding engine can select and call.
+
+    Attributes:
+        name: The function's identifier, used as the trie key.
+        description: A human-readable explanation of what the
+            function does, shown to the model during selection.
+        parameters: A dictionary mapping parameter names to their
+            metadata such as type, description, and enum values.
+            Defaults to an empty dict.
+        returns: Optional description of the function's return value.
+    """
     name: str
     description: str
     parameters: Dict[str, Any] = Field(default_factory=dict)
@@ -41,6 +65,12 @@ class FunctionDefinition(BaseModel):
 
 
 class TestPrompt(BaseModel):
+    """Represents a single test case from the test prompts file.
+
+    Attributes:
+        prompt: The natural language user request to be processed
+            by the constrained decoding engine.
+    """
     prompt: str
 
 
