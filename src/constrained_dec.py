@@ -164,18 +164,10 @@ def select_function(
             if hasattr(logits, "tolist"):
                 logits = logits.tolist()
 
-            if hasattr(tokenizer, "inverse_vocab"):
-                best_token = max(
-                    valid_next.keys(),
-                    key=lambda t: logits[t] if t < len(
-                        logits) else float("-inf")
-                )
-            else:
-                best_token = max(
-                    valid_next.keys(),
-                    key=lambda t: logits[t] if t < len(
-                        logits) else float("-inf")
-                )
+            best_token = max(
+                valid_next.keys(),
+                key=lambda t: logits[t] if t < len(logits) else float("-inf")
+            )
 
             current_ids.append(best_token)
             current_node = current_node.children[best_token]
@@ -202,6 +194,38 @@ def generate_argument(
         function_def: Any = None,
         previous_gen: str = ""
 ) -> Any:
+    """Generates the value of a single function parameter from a user prompt.
+
+    Uses the language model to produce a parameter value token by token,
+    adapting the generation strategy to the parameter type. Booleans are
+    resolved directly from the prompt text. Numbers and integers are built
+    digit by digit with strict validation. Strings are generated freely
+    until a stop token is reached, then refined using regex to preserve
+    exact casing, file paths, quoted values, and template placeholders
+    found in the original prompt. Enum constraints are enforced as a
+    final validation step.
+
+    Args:
+        prompt: The original user request describing the desired action.
+        param_type: The expected type of the parameter. One of 'string',
+            'number', 'integer', or 'boolean'.
+        model: A language model exposing logits via get_logits_from_input_ids
+            or get_logits.
+        tokenizer: A tokenizer used to encode prompts and decode generated
+            tokens.
+        param_name: The name of the parameter being generated, used to
+            build generation context and apply type-specific refinements.
+        inference_tokenizer: An optional alternative tokenizer to use
+            during generation. Falls back to tokenizer if None.
+        function_def: The full function definition object, used to access
+            parameter metadata such as enum constraints.
+        previous_gen: A string containing previously generated parameter
+            assignments, used to provide context for the current generation.
+
+    Returns:
+        The generated parameter value as a string, int, float, boolean,
+        or empty dict if the param_type is not recognized.
+    """
     if not param_type:
         return ""
 
@@ -220,8 +244,6 @@ def generate_argument(
         return ""
 
     tok = inference_tokenizer if inference_tokenizer is not None else tokenizer
-
-    # Igual que tu amigo — acumula previous_gen + param_name=
     prev = previous_gen + f"{param_name}="
 
     prompt_message = (
@@ -242,10 +264,9 @@ def generate_argument(
 
     elif param_type in ("number", "integer"):
         argument_progress = ""
-        max_digits = 20  # Límite de seguridad para evitar cuelgues
+        max_digits = 20
         digit_count = 0
 
-        # Función auxiliar limpia (DRY) para unificar conversiones y límites
         def _parse_and_validate(val_str: str) -> Any:
             try:
                 final_val = float(val_str) if param_type == "number" else int(
@@ -259,8 +280,9 @@ def generate_argument(
         while digit_count < max_digits:
             digit_count += 1
             try:
-                if hasattr(tok, "encode") and \
-                        "add_special_tokens" in tok.encode.__code__.co_varnames:
+                if (hasattr(tok, "encode") and
+                        "add_special_tokens" in
+                        tok.encode.__code__.co_varnames):
                     input_ids = tok.encode(
                         full_prompt + argument_progress,
                         add_special_tokens=False)
