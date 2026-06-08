@@ -53,12 +53,12 @@ debug:
 
 clean:
 	@echo "$(RED)Cleaning up...$(RESET)"
-	rm -rf __pycache__ .pytest_cache .mypy_cache .uv
+	rm -rf __pycache__ .pytest_cache .mypy_cache
 	find . -type d -name "__pycache__" -exec rm -rf {} +
 
 fclean:
-	@echo "$(BLUE)Cleaning up...$(RESET)"
-	rm -rf __pycache__ .pytest_cache .mypy_cache .uv
+	@echo "$(BLUE)Full clean...$(RESET)"
+	rm -rf __pycache__ .pytest_cache .mypy_cache .uv .venv .env
 	find . -type d -name "__pycache__" -exec rm -rf {} +
 
 

@@ -57,12 +57,22 @@ uv sync
 ```bash
 # Default — reads from data/input/, writes to data/output/
 make run
-# or:
+
+# With uv
 uv run python -m src
 
-# Custom paths
-uv run python -m src --input data/input/function_calling_tests.json \
-                     --output data/output/function_calling_results.json
+# With python3 directly
+python3 -m src
+
+# Custom paths with uv
+uv run python -m src --input data/input/functions_definition.json \
+                     --output data/output/function_calling_results.json \
+                     --model qwen
+
+# Custom paths with python3
+python3 -m src --input data/input/functions_definition.json \
+               --output data/output/function_calling_results.json \
+               --model qwen
 ```
 
 ### Makefile targets

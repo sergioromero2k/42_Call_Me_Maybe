@@ -283,7 +283,9 @@ def generate_argument(
                 if (hasattr(tok, "encode") and
                         "add_special_tokens" in
                         tok.encode.__code__.co_varnames):
-                    input_ids = tok.encode(...)
+                    input_ids = tok.encode(
+                        full_prompt + argument_progress,
+                        add_special_tokens=False)
                 else:
                     input_ids = tok.encode(full_prompt + argument_progress)
 
@@ -444,17 +446,17 @@ def generate_argument(
                 final_str = word
                 break
 
-            if (function_def
-                    and hasattr(function_def, "parameters")
-                    and param_name in function_def.parameters):
-                param_meta = function_def.parameters[param_name]
-                if isinstance(param_meta, dict) and "enum" in param_meta:
-                    allowed_enum = param_meta["enum"]
-                    if final_str not in allowed_enum:
-                        for opt in allowed_enum:
-                            if opt.lower() in prompt.lower():
-                                return opt
-                        return allowed_enum[0]
+        if (function_def
+                and hasattr(function_def, "parameters")
+                and param_name in function_def.parameters):
+            param_meta = function_def.parameters[param_name]
+            if isinstance(param_meta, dict) and "enum" in param_meta:
+                allowed_enum = param_meta["enum"]
+                if final_str not in allowed_enum:
+                    for opt in allowed_enum:
+                        if opt.lower() in prompt.lower():
+                            return opt
+                    return allowed_enum[0]
         return final_str
     else:
         return {}
