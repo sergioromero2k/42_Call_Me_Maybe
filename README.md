@@ -85,7 +85,6 @@ python3 -m src --input data/input/functions_definition.json \
 | `make clean` | Remove `__pycache__`, `.mypy_cache`, `.pytest_cache` |
 | `make lint` | `flake8` + `mypy` with standard flags |
 | `make lint-strict` | `flake8` + `mypy --strict` |
-| `make test` | Run the test suite with `pytest` |
 
 ### Input format
 
@@ -233,13 +232,13 @@ JSON validity and schema compliance are **not statistical** — they are **struc
 Tests are written with **pytest** and organized in `tests/`:
 
 - **Unit tests**
-  - `test_models.py` — Pydantic model validation (valid/invalid inputs)
-  - `test_decoder.py` — state machine transitions, token masking logic, numeric/string type handling
-  - `test_io.py` — input file parsing (missing file, invalid JSON, empty array)
-  - `test_prompt.py` — prompt builder output format
+  - `test_models` — Pydantic model validation (valid/invalid inputs)
+  - `test_decoder` — state machine transitions, token masking logic, numeric/string type handling
+  - `test_io` — input file parsing (missing file, invalid JSON, empty array)
+  - `test_prompt` — prompt builder output format
 
 - **Integration tests**
-  - `test_pipeline.py` — full end-to-end run on the provided sample inputs, asserting output structure and type correctness
+  - `test_pipeline` — full end-to-end run on the provided sample inputs, asserting output structure and type correctness
 
 - **Edge cases tested**
   - Empty string arguments
@@ -250,8 +249,6 @@ Tests are written with **pytest** and organized in `tests/`:
 
 Run the suite with:
 ```bash
-make test
-# or:
 uv run pytest tests/ -v
 ```
 

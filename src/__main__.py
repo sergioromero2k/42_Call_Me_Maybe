@@ -273,8 +273,6 @@ def main() -> None:
         write_empty_output(output_path)
         sys.exit(1)
 
-    # Usar el tokenizer interno del modelo para scoring si está disponible
-    # Fallback al CustomTokenizer para compatibilidad con otros LLMs
     if hasattr(model, "_tokenizer"):
         inference_tokenizer = model._tokenizer
         print_visual_step(
